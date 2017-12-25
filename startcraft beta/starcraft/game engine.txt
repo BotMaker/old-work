@@ -1,0 +1,16 @@
+customized 2d game engine
+event driven
+
+sprites
+sounds
+rooms
+objects
+instance
+
+animations
+tile-system
+z ordering
+
+collision detection
+smart collision detection
+faster collision detection

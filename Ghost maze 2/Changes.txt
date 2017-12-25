@@ -1,0 +1,38 @@
+
+Update on the: 30/04/2007
+  
+  fix the setup menu for turning on and off music.
+  made the password screen easyer to use.
+  change the game logic bomb now dies when hitting anything.
+  fix the display message function for when the esc key was pressed the message was still being drawn.
+  made changes to the about screen graphic.
+  change the map file format.
+  made changes to the setup screen better graphics and new positions.
+  add the menu sound for main menu screen password screen and setup screen.
+  fix the background music now music will only be played at startup and when a new game starts or level.
+  add the explosion sound fx for the dynamite object.
+  fix the menu sounds movement and select for all screen that use them.
+  change the about screen add moveing stars looks better.
+  add a new map there are now three maps.
+
+
+Update on the: 1/05/2007
+
+  link the set_window_close_button and set_window_close_hook functions from the alleg40.dll to be able
+  to close the game by click on the close button.
+  change from euAllegro 0.2 to euAllegro 0.3.
+  add two new setting to the setup screen display and scaling game can now be run in fullscreen.
+  made sure no error can happen from the loading of the game settings file.
+  the game wait rate value has been put into the settings file.
+
+Update on the: 2/05/2007
+
+  add the map editor to the game engine so user can make there own map files.
+  fix a bug with the map editor when escape key is use would exit the map editor.
+  change the setup screen add the edit level button and reposition the graphics.
+
+Update on the: 3/05/2007
+  
+  made it easyer to save in the map editor and fix a bug with the display message function.
+  map editor can only be used when the game has been completed.
+  add a cheat system to the password screen skip level cheat and map editor cheat.

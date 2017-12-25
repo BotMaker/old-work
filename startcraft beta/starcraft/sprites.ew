@@ -1,0 +1,284 @@
+global sequence sprite_info
+integer sprite_num
+sprite_info={}
+sprite_num=0
+
+--============================================================--
+global constant SPR_IMAGES=1
+global constant SPR_IMAGE_NUM=2
+global constant SPR_WIDTH=3
+global constant SPR_HEIGHT=4
+global constant SPR_BBOX_LEFT=5
+global constant SPR_BBOX_TOP=6
+global constant SPR_BBOX_RIGHT=7
+global constant SPR_BBOX_BOTTOM=8
+global constant SPR_OFFSETX=9
+global constant SPR_OFFSETY=10
+global constant SPR_BBOX_MODE=11
+global constant SPR_BBOX_MANUAL=12
+global constant SPR_PIXEL_PERFECT=13
+global constant SPR_TRANSPARENT=14
+
+
+
+function load_strip(object fname,integer number)
+  integer too,width,height
+  sequence images
+  atom bitmap,strip_gfx
+  images={}
+
+  strip_gfx=load_bitmap(fname,the_palette)
+
+
+  width=(bitmap_w(strip_gfx)/number)
+  too=(bitmap_w(strip_gfx)/width)
+  height=bitmap_h(strip_gfx)
+
+  for i=1 to too do
+    bitmap=create_bitmap(width,height)
+    images&=bitmap
+    blit(strip_gfx,bitmap,(width*i)-width,0,0,0,width,height)
+  end for
+
+  destroy_bitmap(strip_gfx)
+  return images
+end function
+
+global function add_sprite_strip(sequence info)
+sequence images
+integer left,right,top,bottom
+  images=load_strip(info[1],info[8])
+  left=0
+  right=bitmap_w(images[1])
+  top=0
+  bottom=bitmap_h(images[1])
+  sprite_info=append(sprite_info,{images,length(images)-1,right,bottom,left,top,right,bottom,info[2],info[3],info[4],info[5],info[6],info[7]})
+  sprite_num+=1
+  return sprite_num
+end function
+
+
+-- info[1] -- file name
+-- info[2] -- offsetx
+-- info[3] -- offsety
+-- info[4] -- bbox mode 0=automatic 1=fullimage 2=manual
+-- info[5] -- is a sequence of the manual bbox settings
+-- info[6] -- pixel prefect collsion detction
+-- info[7] -- transparent bool true or false
+global function add_sprite(sequence info)
+atom temp_image
+integer left,right,top,bottom
+  temp_image=load_bitmap(info[1], the_palette) 
+  left=0
+  right=bitmap_w(temp_image)
+  top=0
+  bottom=bitmap_h(temp_image)
+  sprite_info=append(sprite_info,{{temp_image},0,right,bottom,left,top,right,bottom,info[2],info[3],info[4],info[5],info[6],info[7]})
+  sprite_num+=1
+  return sprite_num
+end function
+
+-- info[1] -- file name
+global procedure add_image_to_sprite(integer index, sequence fname)
+atom temp_image
+    temp_image=load_bitmap(fname, the_palette)
+    sprite_info[index][SPR_IMAGES]=append(sprite_info[index][SPR_IMAGES],temp_image)
+    sprite_info[index][SPR_IMAGE_NUM]+=1
+end procedure
+
+atom tempbuffer
+tempbuffer=0
+
+function left_bbox(atom color)
+integer width,height
+sequence temp
+integer small
+width=bitmap_w(tempbuffer)-1
+height=bitmap_h(tempbuffer)-1
+temp={}
+small=width+1
+
+  for i=0 to height do
+     for j=0 to width do
+       if getpixel(tempbuffer,j,i)!=color then
+         temp=append(temp,j)
+         exit
+       end if 
+     end for
+  end for
+  if length(temp)>0 then
+   for i=1 to length(temp) do
+     if temp[i]<small then
+       small=temp[i]
+     end if
+   end for
+   return small
+  else
+   return 0
+  end if
+end function
+
+function right_bbox(atom color)
+integer width,height
+sequence temp
+integer small
+width=bitmap_w(tempbuffer)-1
+height=bitmap_h(tempbuffer)-1
+temp={}
+small=0
+  for i=0 to height do
+     for j=width to 0 by -1 do
+       if getpixel(tempbuffer,j,i)!=color then
+         temp=append(temp,j)
+         exit
+       end if 
+     end for
+  end for
+  if length(temp)>0 then
+   for i=1 to length(temp) do
+     if temp[i]>small then
+       small=temp[i]
+     end if
+   end for
+   return small
+  else
+   return 0
+  end if
+end function
+
+function top_bbox(atom color)
+integer width,height
+width=bitmap_w(tempbuffer)-1
+height=bitmap_h(tempbuffer)-1
+
+  for i=0 to height do
+     for j=0 to width do
+       if getpixel(tempbuffer,j,i)!=color then
+         return i
+       end if 
+     end for
+  end for
+  return 0
+end function
+
+function bottom_bbox(atom color)
+integer width,height
+width=bitmap_w(tempbuffer)-1
+height=bitmap_h(tempbuffer)-1
+
+  for i=height to 0 by -1 do
+     for j=0 to width do
+       if getpixel(tempbuffer,j,i)!=color then
+         return i
+       end if 
+     end for
+  end for
+  return 0
+end function
+
+function low_is(sequence data)
+integer num
+  num=data[1]
+  for i=1 to length(data) do
+    if data[i]<num then
+      num=data[i]
+    end if
+  end for
+  return num
+end function
+
+function high_is(sequence data)
+integer num
+  num=data[1]
+  for i=1 to length(data) do
+    if data[i]>num then
+      num=data[i]
+    end if
+  end for
+  return num
+end function
+
+global procedure set_bbox_for_all_sprites()
+  integer width,height,mode,left,top,right,bottom
+  sequence images
+  atom color
+  sequence lefts,rights,tops,bottoms
+
+for i=1 to length(sprite_info) do
+
+  width=sprite_info[i][SPR_WIDTH]
+  height=sprite_info[i][SPR_HEIGHT]
+  images=sprite_info[i][SPR_IMAGES]
+  mode=sprite_info[i][SPR_BBOX_MODE]
+
+  if mode=0 then  -- automatic bbox dection
+
+    lefts={}
+    rights={}
+    tops={}
+    bottoms={}
+
+    tempbuffer=create_bitmap(width,height)
+    blit( images[1], tempbuffer, 0, 0 ,0 , 0 ,width,height)
+    color=getpixel(tempbuffer,0,0)
+
+    for j=1 to length(images) do
+      blit( images[j], tempbuffer, 0, 0 ,0 , 0 ,width,height)
+      lefts&=left_bbox(color)
+      rights&=right_bbox(color)
+      tops&=top_bbox(color)
+      bottoms&=bottom_bbox(color)
+    end for
+
+    if length(lefts)>0 then
+      left=low_is(lefts)
+    else
+      left=0
+    end if
+
+    if length(tops)>0 then
+      top=low_is(tops)
+    else
+      top=0
+    end if
+
+    if length(rights)>0 then
+      right=low_is(rights)
+    else
+      right=width
+    end if
+
+    if length(bottoms)>0 then
+      bottom=low_is(bottoms)
+    else
+      bottom=height
+    end if
+        
+
+    destroy_bitmap(tempbuffer)
+
+    sprite_info[i][SPR_BBOX_LEFT]=left
+    sprite_info[i][SPR_BBOX_RIGHT]=right
+    sprite_info[i][SPR_BBOX_TOP]=top
+    sprite_info[i][SPR_BBOX_BOTTOM]=bottom
+
+  elsif mode=1 then
+    -- fullimage dont need to do anything or ready set when sprite was created 
+  elsif mode=2 then
+    sprite_info[i][SPR_BBOX_LEFT]=sprite_info[i][SPR_BBOX_MANUAL][1]
+    sprite_info[i][SPR_BBOX_TOP]=sprite_info[i][SPR_BBOX_MANUAL][2]
+    sprite_info[i][SPR_BBOX_RIGHT]=sprite_info[i][SPR_BBOX_MANUAL][3]
+    sprite_info[i][SPR_BBOX_BOTTOM]=sprite_info[i][SPR_BBOX_MANUAL][4]
+  end if
+end for
+
+end procedure
+
+global procedure destroy_sprites()
+  for i=1 to length(sprite_info) do
+    for j=1 to length(sprite_info[i][SPR_IMAGES]) do
+      destroy_bitmap(sprite_info[i][SPR_IMAGES][j])
+    end for
+  end for
+end procedure
+--============================================================--

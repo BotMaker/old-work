@@ -1,0 +1,2358 @@
+without type_check
+without warning
+
+include euallegro.ew
+include euPPCol.ew
+include misc.e
+
+
+atom buffer
+atom the_palette
+integer ret
+integer window_width,window_height
+integer fps1,fps2
+atom timer1
+window_width=800
+window_height=600
+fps1=0
+fps2=0
+timer1=0
+integer time1,limit,wait
+time1=0
+limit=30
+wait=50
+
+function real(sequence string)
+sequence temp
+temp=value(string)
+return temp[2]
+end function
+
+the_palette = allocate_palette()
+ret = allegro_init()
+ret = install_timer()
+ret = install_keyboard()
+ret = reserve_voices (16, -1)
+ret = set_window_close_button(1)
+ret= install_sound (DIGI_AUTODETECT, MIDI_AUTODETECT, "")
+set_color_depth(16)
+set_volume(255, 100)
+
+set_window_title("Alien Attack")
+
+ret = set_gfx_mode(GFX_AUTODETECT_WINDOWED, window_width, window_height, 0,0)
+--ret = set_gfx_mode(GFX_AUTODETECT_FULLSCREEN, window_width, window_height, 0,0)
+
+function rgb( integer r, integer g, integer b )
+    return makecol(r,g,b)
+end function
+
+sequence music
+music={}
+music&=load_midi("sounds\\title_music.mid")
+music&=load_midi("sounds\\midi1_music.mid")
+
+procedure play_music()
+
+    ret=play_midi(music[1], 1)
+
+end procedure
+play_music()
+
+atom player_shoot_sfx
+player_shoot_sfx=load_sample("sounds\\player_shoot_sound.wav")
+
+atom destroy1_sfx
+destroy1_sfx=load_sample("sounds\\destroy1_sound.wav")
+atom destroy2_sfx
+destroy2_sfx=load_sample("sounds\\destroy2_sound.wav")
+atom destroy3_sfx
+destroy3_sfx=load_sample("sounds\\destroy3_sound.wav")
+atom destroy4_sfx
+destroy4_sfx=load_sample("sounds\\destroy4_sound.wav")
+atom destroy5_sfx
+destroy5_sfx=load_sample("sounds\\destroy5_sound.wav")
+--ret=play_sample (point_sfx, 255, 128, 1000, 0)
+
+atom ground_bar
+ground_bar=load_bitmap("images\\ground.bmp", the_palette)
+
+sequence backgrounds
+backgrounds={}
+backgrounds&=load_bitmap("images\\star_background.bmp", the_palette)
+backgrounds&=load_bitmap("images\\ground_background.bmp", the_palette)
+
+sequence messages 
+messages={}
+messages&=load_bitmap("images\\title_sprite.bmp", the_palette)
+messages&=load_bitmap("images\\exit_sprite.bmp", the_palette)
+messages&=load_bitmap("images\\game_paused_sprite.bmp", the_palette)
+
+sequence images
+images={}
+images&= load_bitmap("images\\player_sprite.bmp", the_palette)        --1
+images&= load_bitmap("images\\player_bullet_sprite.bmp", the_palette) --2
+images&= load_bitmap("images\\alien1_sprite_1.bmp", the_palette)      --3
+images&= load_bitmap("images\\alien1_sprite_2.bmp", the_palette)      --4
+images&= load_bitmap("images\\alien2_sprite_1.bmp", the_palette)      --5
+images&= load_bitmap("images\\alien2_sprite_2.bmp", the_palette)      --6
+images&= load_bitmap("images\\alien3_sprite.bmp", the_palette)        --7
+images&= load_bitmap("images\\alien4_sprite_1.bmp", the_palette)      --8
+images&= load_bitmap("images\\alien4_sprite_2.bmp", the_palette)      --9
+images&= load_bitmap("images\\alien4_sprite_3.bmp", the_palette)      --10
+images&= load_bitmap("images\\alien4_sprite_4.bmp", the_palette)      --11
+images&= load_bitmap("images\\alien5_sprite_1.bmp", the_palette)      --12
+images&= load_bitmap("images\\alien5_sprite_2.bmp", the_palette)      --13
+--boss one
+images&= load_bitmap("images\\boss1_sprite_1.bmp", the_palette)      --14
+images&= load_bitmap("images\\boss1_sprite_2.bmp", the_palette)      --15
+images&= load_bitmap("images\\boss1_dead_sprite.bmp", the_palette)      --16
+images&= load_bitmap("images\\boss1_bullet_sprite.bmp", the_palette)      --17
+images&= load_bitmap("images\\block1_sprite.bmp", the_palette)      --18
+
+
+sequence alien_bullets
+alien_bullets={}
+alien_bullets&= load_bitmap("images\\alien_bullet1_sprite.bmp", the_palette)
+
+integer game_mode
+game_mode=0
+
+set_palette(the_palette)
+buffer=create_bitmap(window_width,window_height)
+
+procedure delay(integer v)
+atom time1
+  time1=0
+  if v<0 then return end if
+  while time1<v do
+     time1+=0.0001
+  end while
+end procedure
+
+integer game_end
+game_end=0
+function game_exit()
+  game_end=1
+  return 1
+end function 
+set_window_close_hook(routine_id("game_exit"))
+
+constant LEFT=1
+constant RIGHT=2
+constant UP=3
+constant DOWN=4
+constant TRUE=1
+constant FALSE=0
+
+object junk
+junk = {{},{}}
+for j = 360 to 0 by -1 do
+    junk[1] = append(junk[1], sin(j*PI/180) )
+    junk[2] = append(junk[2], cos(j*PI/180) )
+end for
+global constant sin_loTRUE2up = junk[1], cos_loTRUE2up = junk[2]
+
+--======================================Game Objects============================--
+
+integer ground_bar_x,ground_bar_y
+ground_bar_x=0
+ground_bar_y=574
+
+integer current_room
+current_room=0
+
+integer check_exit,game_pause
+check_exit=0
+game_pause=0
+
+atom player_x, player_y, player_speed, player_direction, player_friction
+integer player_sprite_width,player_sprite_height,player_alarm0,player_shoot
+
+player_x=384
+player_y=544 
+player_speed=0 
+player_direction=0
+player_sprite_width=34
+player_sprite_height=30
+player_friction=1
+player_alarm0=0
+player_shoot=TRUE
+
+sequence player_bullet_info,player_bullet_freeinfo
+player_bullet_info={}
+player_bullet_freeinfo={}
+
+sequence green_info, green_freeinfo
+green_info={}
+green_freeinfo={}
+
+sequence brown_info, brown_freeinfo
+brown_info={}
+brown_freeinfo={}
+
+sequence red_info, red_freeinfo
+red_info={}
+red_freeinfo={}
+
+sequence alien1_info,alien1_freeinfo
+alien1_info={}
+alien1_freeinfo={}
+
+sequence alien2_info,alien2_freeinfo
+alien2_info={}
+alien2_freeinfo={}
+
+sequence alien3_info,alien3_freeinfo
+alien3_info={}
+alien3_freeinfo={}
+
+sequence alien4_info,alien4_freeinfo
+alien4_info={}
+alien4_freeinfo={}
+
+sequence alien5_info,alien5_freeinfo
+alien5_info={}
+alien5_freeinfo={}
+
+sequence alien_bullet1_info,alien_bullet1_freeinfo
+alien_bullet1_info={}
+alien_bullet1_freeinfo={}
+
+sequence block1_info,block1_freeinfo
+block1_info={}
+block1_freeinfo={}
+
+sequence boss1_bullet_info,boss1_bullet_freeinfo
+boss1_bullet_info={}
+boss1_bullet_freeinfo={}
+
+
+procedure green_step()
+  atom x,y
+  integer dir,speed,alarm0
+  for i=1 to length(green_info) do
+    if length(green_info[i])>0 then
+      x=green_info[i][1]
+      y=green_info[i][2]
+      dir=green_info[i][3]+1
+      speed=green_info[i][4]
+      alarm0=green_info[i][5]
+
+      x += speed*cos_loTRUE2up[dir]
+      y += speed*sin_loTRUE2up[dir]
+      green_info[i][1]=x
+      green_info[i][2]=y
+      putpixel(buffer, floor(x), floor(y), rgb(0,255,0))
+
+      if alarm0>0 then
+        alarm0-=1
+        green_info[i][5]=alarm0
+        if alarm0=0 then
+          green_info[i]={}
+          green_freeinfo=append(green_freeinfo,i)
+        end if
+      end if
+      
+    end if
+  end for
+end procedure
+
+procedure create_green(atom x,atom y)
+  for i=1 to 100 do
+    if length(green_freeinfo) then
+      green_info[green_freeinfo[1]]={x, y,rand(360),rand(5),1+rand(20)}
+      green_freeinfo=green_freeinfo[2..length(green_freeinfo)]
+    else
+      green_info=append(green_info, {x, y,rand(360),rand(5),1+rand(20)} )
+    end if
+  end for
+end procedure
+
+procedure brown_step()
+  atom x,y
+  integer dir,speed,alarm0
+  for i=1 to length(brown_info) do
+    if length(brown_info[i])>0 then
+      x=brown_info[i][1]
+      y=brown_info[i][2]
+      dir=brown_info[i][3]+1
+      speed=brown_info[i][4]
+      alarm0=brown_info[i][5]
+
+      x += speed*cos_loTRUE2up[dir]
+      y += speed*sin_loTRUE2up[dir]
+      brown_info[i][1]=x
+      brown_info[i][2]=y
+      putpixel(buffer, floor(x), floor(y), rgb(208,136,79))
+
+      if alarm0>0 then
+        alarm0-=1
+        brown_info[i][5]=alarm0
+        if alarm0=0 then
+          brown_info[i]={}
+          brown_freeinfo=append(brown_freeinfo,i)
+        end if
+      end if
+      
+    end if
+  end for
+end procedure
+
+procedure create_brown(atom x,atom y)
+  for i=1 to 100 do
+    if length(brown_freeinfo) then
+      brown_info[brown_freeinfo[1]]={x, y,rand(360),rand(5),1+rand(20)}
+      brown_freeinfo=brown_freeinfo[2..length(brown_freeinfo)]
+    else
+      brown_info=append(brown_info, {x, y,rand(360),rand(5),1+rand(20)} )
+    end if
+  end for
+end procedure
+
+procedure red_step()
+  atom x,y
+  integer dir,speed,alarm0
+  for i=1 to length(red_info) do
+    if length(red_info[i])>0 then
+      x=red_info[i][1]
+      y=red_info[i][2]
+      dir=red_info[i][3]+1
+      speed=red_info[i][4]
+      alarm0=red_info[i][5]
+
+      x += speed*cos_loTRUE2up[dir]
+      y += speed*sin_loTRUE2up[dir]
+      red_info[i][1]=x
+      red_info[i][2]=y
+      putpixel(buffer, floor(x), floor(y), rgb(255,0,0))
+
+      if alarm0>0 then
+        alarm0-=1
+        red_info[i][5]=alarm0
+        if alarm0=0 then
+          red_info[i]={}
+          red_freeinfo=append(red_freeinfo,i)
+        end if
+      end if
+      
+    end if
+  end for
+end procedure
+
+procedure create_red(atom x,atom y)
+  for i=1 to 100 do
+    if length(red_freeinfo) then
+      red_info[red_freeinfo[1]]={x, y,rand(360),rand(5),1+rand(20)}
+      red_freeinfo=red_freeinfo[2..length(red_freeinfo)]
+    else
+      red_info=append(red_info, {x, y,rand(360),rand(5),1+rand(20)} )
+    end if
+  end for
+end procedure
+
+function check_collision_alien1(integer pbx, integer pby) --player bullet hits alien1
+  atom x,y
+  integer frame
+  for i=1 to length(alien1_info) do
+    if length(alien1_info[i])>0 then
+      x=alien1_info[i][1]
+      y=alien1_info[i][2]
+      frame=alien1_info[i][3]
+      
+      if check_pp_collision(images[2],images[3+frame] , floor(pbx), floor(pby), floor(x), floor(y))=1 then
+        return i
+      end if
+      
+    end if
+  end for
+
+  return 0
+end function
+
+function check_collision_player_and_alien1()--player hits alien1
+  atom x,y
+  integer frame
+  for i=1 to length(alien1_info) do
+    if length(alien1_info[i])>0 then
+      x=alien1_info[i][1]
+      y=alien1_info[i][2]
+      frame=alien1_info[i][3]
+      
+      if check_pp_collision(images[1],images[3+frame] , player_x, player_y, floor(x), floor(y))=1 then
+        return i
+      end if
+      
+    end if
+  end for
+
+  return 0
+end function
+
+function check_collision_alien2(integer pbx, integer pby) --player bullet hits alien2
+  atom x,y
+  integer frame
+  
+  for i=1 to length(alien2_info) do
+    if length(alien2_info[i])>0 then
+      x=alien2_info[i][1]
+      y=alien2_info[i][2]
+      frame=alien2_info[i][3]
+      
+      if check_pp_collision(images[2],images[5+frame] , floor(pbx), floor(pby), floor(x), floor(y))=1 then
+        return i
+      end if
+      
+    end if
+  end for
+
+  return 0
+end function
+
+function check_collision_player_and_alien2() --player hits alien2
+  atom x,y
+  integer frame
+  
+  for i=1 to length(alien2_info) do
+    if length(alien2_info[i])>0 then
+      x=alien2_info[i][1]
+      y=alien2_info[i][2]
+      frame=alien2_info[i][3]
+      
+      if check_pp_collision(images[1],images[5+frame] , player_x, player_y, floor(x), floor(y))=1 then
+        return i
+      end if
+      
+    end if
+  end for
+
+  return 0
+end function
+
+
+function check_collision_alien3(integer pbx, integer pby) --player bullet hits alien3
+  atom x,y
+  
+  for i=1 to length(alien3_info) do
+    if length(alien3_info[i])>0 then
+      x=alien3_info[i][1]
+      y=alien3_info[i][2]
+      
+      if check_pp_collision(images[2],images[7] , floor(pbx), floor(pby), floor(x), floor(y))=1 then
+        return i
+      end if
+      
+    end if
+  end for
+
+  return 0
+end function
+
+function check_collision_player_and_alien3() --player hits alien3
+  atom x,y
+  
+  for i=1 to length(alien3_info) do
+    if length(alien3_info[i])>0 then
+      x=alien3_info[i][1]
+      y=alien3_info[i][2]
+      
+      if check_pp_collision(images[1],images[7] , player_x, player_y, floor(x), floor(y))=1 then
+        return i
+      end if
+      
+    end if
+  end for
+
+  return 0
+end function
+
+
+
+function check_collision_alien4(integer pbx, integer pby) --player bullet hits alien4
+  atom x,y
+  
+  for i=1 to length(alien4_info) do
+    if length(alien4_info[i])>0 then
+      x=alien4_info[i][1]
+      y=alien4_info[i][2]
+      
+      if check_pp_collision(images[2],images[8] , floor(pbx), floor(pby), floor(x), floor(y))=1 then
+        return i
+      end if
+      
+    end if
+  end for
+
+  return 0
+end function
+
+function check_collision_player_and_alien4() --player hits alien4
+  atom x,y
+  
+  for i=1 to length(alien4_info) do
+    if length(alien4_info[i])>0 then
+      x=alien4_info[i][1]
+      y=alien4_info[i][2]
+      
+      if check_pp_collision(images[1],images[8] , player_x, player_y, floor(x), floor(y))=1 then
+        return i
+      end if
+      
+    end if
+  end for
+
+  return 0
+end function
+
+function check_collision_alien5(integer pbx, integer pby) --player bullet hits alien5
+  atom x,y
+  
+  for i=1 to length(alien5_info) do
+    if length(alien5_info[i])>0 then
+      x=alien5_info[i][1]
+      y=alien5_info[i][2]
+      
+      if check_pp_collision(images[2],images[12] , floor(pbx), floor(pby), floor(x), floor(y))=1 then
+        return i
+      end if
+      
+    end if
+  end for
+
+  return 0
+end function
+
+function check_collision_player_and_alien5() --player hits alien5
+  atom x,y
+  
+  for i=1 to length(alien5_info) do
+    if length(alien5_info[i])>0 then
+      x=alien5_info[i][1]
+      y=alien5_info[i][2]
+      
+      if check_pp_collision(images[1],images[12] , player_x, player_y, floor(x), floor(y))=1 then
+        return i
+      end if
+      
+    end if
+  end for
+
+  return 0
+end function
+
+
+
+function check_collision_player_and_alien1_bullet() --player hits alien1 bullet
+  atom x,y
+  
+  for i=1 to length(alien_bullet1_info) do
+    if length(alien_bullet1_info[i])>0 then
+      x=alien_bullet1_info[i][1]
+      y=alien_bullet1_info[i][2]
+      
+      if check_pp_collision(images[1],alien_bullets[1] , player_x, player_y, floor(x), floor(y))=1 then
+        return i
+      end if
+      
+    end if
+  end for
+
+  return 0
+end function
+
+procedure create_alien1(integer x,integer y)
+
+  if length(alien1_freeinfo) then
+    alien1_info[alien1_freeinfo[1]]={x, y,0,0,0}
+    alien1_freeinfo=alien1_freeinfo[2..length(alien1_freeinfo)]
+  else
+
+    alien1_info=append(alien1_info, {x, y,0,0,0} )
+  end if
+
+end procedure
+
+procedure create_alien3(integer x,integer y)
+
+  if length(alien3_freeinfo) then
+    alien3_info[alien3_freeinfo[1]]={x, y,50,0}
+    alien3_freeinfo=alien3_freeinfo[2..length(alien3_freeinfo)]
+  else
+
+    alien3_info=append(alien3_info, {x, y,50,0} )
+  end if
+end procedure
+
+
+procedure create_alien4(integer x,integer y)
+
+  if length(alien4_freeinfo) then
+    alien4_info[alien4_freeinfo[1]]={x, y,0,0,0}
+    alien4_freeinfo=alien4_freeinfo[2..length(alien4_freeinfo)]
+  else
+
+    alien4_info=append(alien4_info, {x, y,0,0,0} )
+  end if
+end procedure
+
+procedure player_bullet_step()
+  atom x,y
+  integer index
+  for i=1 to length(player_bullet_info) do
+     if length(player_bullet_info[i]) >0 then
+       x=player_bullet_info[i][1]
+       y=player_bullet_info[i][2]
+       player_bullet_info[i][2]-=15
+       draw_sprite( buffer,images[2], floor(x), floor(y))
+       
+       index= check_collision_alien1(floor(x), floor(y))
+       if index!=0 then
+         player_bullet_info[i]={}
+         player_bullet_freeinfo =append(player_bullet_freeinfo, i)
+         create_green(alien1_info[index][1]+15,alien1_info[index][2])
+         ret=play_sample (destroy1_sfx, 255, 128, 1000, 0)
+         alien1_info[index]={}
+         alien1_freeinfo=append(alien1_freeinfo,index)
+       end if
+
+       index= check_collision_alien2(floor(x), floor(y))
+       if index!=0 then
+         player_bullet_info[i]={}
+         player_bullet_freeinfo =append(player_bullet_freeinfo, i)
+         create_alien1(floor(alien2_info[index][1]),floor(alien2_info[index][2]))
+         create_red(alien2_info[index][1]+15,alien2_info[index][2])
+         ret=play_sample (destroy2_sfx, 255, 128, 1000, 0)
+         alien2_info[index]={}
+         alien2_freeinfo=append(alien2_freeinfo,index)
+       end if
+
+       index= check_collision_alien3(floor(x), floor(y))
+       if index!=0 then
+         player_bullet_info[i]={}
+         player_bullet_freeinfo =append(player_bullet_freeinfo, i)
+         create_brown(alien3_info[index][1]+15,alien3_info[index][2])
+         ret=play_sample (destroy3_sfx, 255, 128, 1000, 0)
+         alien3_info[index]={}
+         alien3_freeinfo=append(alien3_freeinfo,index)
+       end if
+
+       index= check_collision_alien4(floor(x), floor(y))
+       if index!=0 then
+         player_bullet_info[i]={}
+         player_bullet_freeinfo =append(player_bullet_freeinfo, i)
+         create_alien3(floor(alien4_info[index][1]),floor(alien4_info[index][2]))
+         create_brown(alien4_info[index][1]+15,alien4_info[index][2])
+         ret=play_sample (destroy4_sfx, 255, 128, 1000, 0)
+         alien4_info[index]={}
+         alien4_freeinfo=append(alien4_freeinfo,index)
+       end if
+
+       index= check_collision_alien5(floor(x), floor(y))
+       if index!=0 then
+         player_bullet_info[i]={}
+         player_bullet_freeinfo =append(player_bullet_freeinfo, i)
+         create_alien4(floor(alien5_info[index][1]),floor(alien5_info[index][2]))
+         create_green(alien5_info[index][1]+15,alien5_info[index][2])
+         ret=play_sample (destroy5_sfx, 255, 128, 1000, 0)
+         alien5_info[index]={}
+         alien5_freeinfo=append(alien5_freeinfo,index)
+       end if
+
+       if (y-15)+30 <0 then
+         player_bullet_info[i]={}
+         player_bullet_freeinfo =append(player_bullet_freeinfo, i)
+       end if
+     end if
+  end for
+
+end procedure
+
+procedure create_player_bullet()
+
+  if length(player_bullet_freeinfo) then
+    player_bullet_info[player_bullet_freeinfo[1]]={player_x, player_y}
+    player_bullet_freeinfo=player_bullet_freeinfo[2..length(player_bullet_freeinfo)]
+  else
+
+    player_bullet_info=append(player_bullet_info, {player_x, player_y} )
+  end if
+
+end procedure
+
+
+procedure create_player_bullet3()
+
+  if length(player_bullet_freeinfo) then
+    player_bullet_info[player_bullet_freeinfo[1]]={player_x-12, player_y+4}
+    player_bullet_freeinfo=player_bullet_freeinfo[2..length(player_bullet_freeinfo)]
+  else
+
+    player_bullet_info=append(player_bullet_info, {player_x-12, player_y+4} )
+  end if
+
+  if length(player_bullet_freeinfo) then
+    player_bullet_info[player_bullet_freeinfo[1]]={player_x, player_y}
+    player_bullet_freeinfo=player_bullet_freeinfo[2..length(player_bullet_freeinfo)]
+  else
+
+    player_bullet_info=append(player_bullet_info, {player_x, player_y} )
+  end if
+
+  if length(player_bullet_freeinfo) then
+    player_bullet_info[player_bullet_freeinfo[1]]={player_x+12, player_y+4}
+    player_bullet_freeinfo=player_bullet_freeinfo[2..length(player_bullet_freeinfo)]
+  else
+
+    player_bullet_info=append(player_bullet_info, {player_x+12, player_y+4} )
+  end if
+
+end procedure
+
+
+procedure create_100_player_bullets()
+integer x
+x=0
+for i=1 to 100 do
+  if length(player_bullet_freeinfo) then
+    player_bullet_info[player_bullet_freeinfo[1]]={x, player_y}
+    player_bullet_freeinfo=player_bullet_freeinfo[2..length(player_bullet_freeinfo)]
+  else
+
+    player_bullet_info=append(player_bullet_info, {x, player_y} )
+  end if
+x+=8
+end for
+end procedure
+
+procedure player_step()
+  integer index
+
+  if player_speed>0 then
+    if player_direction=LEFT then
+      player_x-=player_speed
+    elsif player_direction=RIGHT then
+      player_x+=player_speed
+    end if
+    player_speed-=player_friction
+   
+  end if
+
+    if player_x<=-32 then
+      player_x=798
+    end if
+    if player_x>=832 then
+      player_x=-32
+    end if
+
+  if player_alarm0>0 then
+    player_alarm0-=1
+    if player_alarm0=0 then
+      player_shoot=TRUE
+    end if
+  end if
+
+  index=check_collision_player_and_alien1()
+
+  if index!=0 then
+    create_green(alien1_info[index][1]+15,alien1_info[index][2])
+    ret=play_sample (destroy1_sfx, 255, 128, 1000, 0)
+    alien1_info[index]={}
+    alien1_freeinfo=append(alien1_freeinfo,index)
+  end if
+
+  index=check_collision_player_and_alien2()
+
+  if index!=0 then
+    create_red(alien2_info[index][1]+15,alien2_info[index][2])
+    ret=play_sample (destroy2_sfx, 255, 128, 1000, 0)
+    alien2_info[index]={}
+    alien2_freeinfo=append(alien2_freeinfo,index)
+  end if
+
+  index=check_collision_player_and_alien3()
+
+  if index!=0 then
+    create_brown(alien3_info[index][1]+15,alien3_info[index][2])
+    ret=play_sample (destroy3_sfx, 255, 128, 1000, 0)
+    alien3_info[index]={}
+    alien3_freeinfo=append(alien3_freeinfo,index)
+  end if
+
+  index=check_collision_player_and_alien4()
+
+  if index!=0 then
+    create_brown(alien4_info[index][1]+15,alien4_info[index][2])
+    ret=play_sample (destroy4_sfx, 255, 128, 1000, 0)
+    alien4_info[index]={}
+    alien4_freeinfo=append(alien3_freeinfo,index)
+  end if
+
+  index=check_collision_player_and_alien5()
+
+  if index!=0 then
+    create_green(alien5_info[index][1]+15,alien5_info[index][2])
+    ret=play_sample (destroy5_sfx, 255, 128, 1000, 0)
+    alien5_info[index]={}
+    alien5_freeinfo=append(alien5_freeinfo,index)
+  end if
+
+  index=check_collision_player_and_alien1_bullet()
+  
+  if index!=0 then
+    alien_bullet1_info[index]={}
+    alien_bullet1_freeinfo=append(alien_bullet1_freeinfo,index)
+  end if
+
+  if key(KEY_LEFT) then
+    player_direction=LEFT
+    player_speed=8
+  end if
+  if key(KEY_RIGHT) then
+    player_direction=RIGHT
+    player_speed=8
+  end if
+  if key(KEY_SPACE) then
+    if player_shoot=TRUE then
+      player_shoot=FALSE
+      player_alarm0=7
+      create_player_bullet3()
+      ret=play_sample (player_shoot_sfx, 255, 128, 1000, 0)
+    end if
+  end if
+  --if key(KEY_ENTER) then
+  --  if player_shoot=TRUE then
+  --    player_shoot=FALSE
+  --    player_alarm0=7
+  --    create_100_player_bullets()
+  --    ret=play_sample (player_shoot_sfx, 255, 128, 1000, 0)
+  --  end if
+  --end if
+
+  draw_sprite( buffer,images[1], floor(player_x), floor(player_y))
+end procedure
+
+procedure alien_bullet1_step()
+  atom x,y
+  for i=1 to length(alien_bullet1_info) do
+    if length(alien_bullet1_info[i])>0 then
+      x=alien_bullet1_info[i][1]
+      y=alien_bullet1_info[i][2]
+    
+      y+=10
+      alien_bullet1_info[i][2]=y
+
+      draw_sprite( buffer,alien_bullets[1], floor(x), floor(y))
+
+      if check_pp_collision(ground_bar, alien_bullets[1] , ground_bar_x, ground_bar_y, floor(x), floor(y))=1 then
+        alien_bullet1_info[i]={}
+        alien_bullet1_freeinfo=append(alien_bullet1_freeinfo,i)
+      end if
+
+    end if
+  end for
+end procedure
+
+procedure create_alien_bullet1(atom x, atom y)
+
+  if length(alien_bullet1_freeinfo) then
+    alien_bullet1_info[alien_bullet1_freeinfo[1]]={x, y,0,0,0}
+    alien_bullet1_freeinfo=alien_bullet1_freeinfo[2..length(alien_bullet1_freeinfo)]
+  else
+    alien_bullet1_info=append(alien_bullet1_info, {x, y,0,0,0} )
+  end if
+
+end procedure
+
+procedure alien1_step()
+  atom x,y,image_speed
+  integer frame,ground_hit
+  for i=1 to length(alien1_info) do
+    if length(alien1_info[i])>0 then
+      x=alien1_info[i][1]
+      y=alien1_info[i][2]
+      frame=alien1_info[i][3]
+      image_speed=alien1_info[i][4]
+      ground_hit=alien1_info[i][5]
+
+      if game_mode!=0 then --title room
+        if ground_hit=0 then
+          alien1_info[i][2]+=0.2
+          if check_pp_collision(ground_bar,images[3] , ground_bar_x, ground_bar_y, floor(x), floor(y))=1 then
+            alien1_info[i][5]=1
+          end if
+        else
+          alien1_info[i][1]+=10
+          if alien1_info[i][1] >= 830 then
+            alien1_info[i][1]=-30
+          end if
+        end if
+      end if
+    
+      image_speed+=0.1
+      if image_speed>=1 then
+        image_speed=0
+        frame+=1
+        if frame>1 then
+          frame=0
+        end if
+        alien1_info[i][3]=frame
+      end if
+      
+      alien1_info[i][4]=image_speed
+
+      draw_sprite( buffer,images[3+frame], floor(x), floor(y))
+    end if
+  end for
+end procedure
+
+
+procedure alien2_step()
+  atom x,y,image_speed
+  integer frame,ground_hit
+  for i=1 to length(alien2_info) do
+    if length(alien2_info[i])>0 then
+      x=alien2_info[i][1]
+      y=alien2_info[i][2]
+      frame=alien2_info[i][3]
+      image_speed=alien2_info[i][4]
+      ground_hit=alien2_info[i][5]
+
+      if game_mode!=0 then --title room
+        if ground_hit=0 then
+          alien2_info[i][2]+=0.2
+          if check_pp_collision(ground_bar,images[5] , ground_bar_x, ground_bar_y, floor(x), floor(y) )=1 then
+            alien2_info[i][5]=1
+          end if
+        else
+          alien2_info[i][1]+=10
+          if alien2_info[i][1] >= 830 then
+            alien2_info[i][1]=-30
+          end if
+        end if
+      end if
+    
+      image_speed+=0.1
+      if image_speed>=1 then
+        image_speed=0
+        frame+=1
+        if frame>1 then
+          frame=0
+        end if
+        alien2_info[i][3]=frame
+      end if
+      
+      alien2_info[i][4]=image_speed
+
+      draw_sprite( buffer,images[5+frame], floor(x), floor(y))
+    end if
+  end for
+end procedure
+
+procedure create_alien2(integer x,integer y)
+
+  if length(alien2_freeinfo) then
+    alien2_info[alien2_freeinfo[1]]={x, y,0,0,0}
+    alien2_freeinfo=alien2_freeinfo[2..length(alien2_freeinfo)]
+  else
+
+    alien2_info=append(alien2_info, {x, y,0,0,0} )
+  end if
+end procedure
+
+
+procedure alien3_step()
+  atom x,y
+  integer alarm0,ground_hit
+  for i=1 to length(alien3_info) do
+    if length(alien3_info[i])>0 then
+      x=alien3_info[i][1]
+      y=alien3_info[i][2]
+      alarm0=alien3_info[i][3]
+      ground_hit=alien3_info[i][4]
+
+      if game_mode!=0 then --title room
+        if ground_hit=0 then
+          alien3_info[i][2]+=0.2
+          if check_pp_collision(ground_bar,images[7] , ground_bar_x, ground_bar_y, floor(x), floor(y) )=1 then
+            alien3_info[i][4]=1
+          end if
+        else
+          alien3_info[i][1]+=10
+          if alien3_info[i][1] >= 830 then
+            alien3_info[i][1]=-30
+          end if
+        end if
+      end if
+
+      if alarm0>0 then
+        alarm0-=1
+        alien3_info[i][3]=alarm0
+        if alarm0=0 then
+          alien3_info[i][3]=50
+          create_alien_bullet1(x, y)
+        end if
+      end if
+      
+      draw_sprite( buffer,images[7], floor(x), floor(y))
+    end if
+  end for
+end procedure
+
+procedure alien4_step()
+  atom x,y,image_speed
+  integer frame,ground_hit
+  for i=1 to length(alien4_info) do
+    if length(alien4_info[i])>0 then
+      x=alien4_info[i][1]
+      y=alien4_info[i][2]
+      frame=alien4_info[i][3]
+      image_speed=alien4_info[i][4]
+      ground_hit=alien4_info[i][5]
+
+      if game_mode!=0 then --title room
+        if ground_hit=0 then
+          alien4_info[i][2]+=0.2
+          if check_pp_collision(ground_bar,images[8] , ground_bar_x, ground_bar_y, floor(x), floor(y) )=1 then
+            alien4_info[i][5]=1
+          end if
+        else
+          alien4_info[i][1]+=10
+          if alien4_info[i][1] >= 830 then
+            alien4_info[i][1]=-30
+          end if
+        end if
+      end if
+    
+      image_speed+=0.1
+      if image_speed>=1 then
+        image_speed=0
+        frame+=1
+        if frame>3 then
+          frame=0
+        end if
+        alien4_info[i][3]=frame
+      end if
+      
+      alien4_info[i][4]=image_speed
+
+      draw_sprite( buffer,images[8+frame], floor(x), floor(y))
+    end if
+  end for
+end procedure
+
+procedure alien5_step()
+  atom x,y,image_speed
+  integer frame,ground_hit
+  for i=1 to length(alien5_info) do
+    if length(alien5_info[i])>0 then
+      x=alien5_info[i][1]
+      y=alien5_info[i][2]
+      frame=alien5_info[i][3]
+      image_speed=alien5_info[i][4]
+      ground_hit=alien5_info[i][5]
+
+      if game_mode!=0 then --title room
+        if ground_hit=0 then
+          alien5_info[i][2]+=0.2
+          if check_pp_collision(ground_bar,images[12] , ground_bar_x, ground_bar_y, floor(x), floor(y) )=1 then
+            alien5_info[i][5]=1
+          end if
+        else
+          alien5_info[i][1]+=10
+          if alien5_info[i][1] >= 830 then
+            alien5_info[i][1]=-30
+          end if
+        end if
+      end if
+    
+      image_speed+=0.1
+      if image_speed>=1 then
+        image_speed=0
+        frame+=1
+        if frame>1 then
+          frame=0
+        end if
+        alien5_info[i][3]=frame
+      end if
+      
+      alien5_info[i][4]=image_speed
+
+      draw_sprite( buffer,images[12+frame], floor(x), floor(y))
+    end if
+  end for
+end procedure
+
+procedure create_alien5(integer x,integer y)
+
+  if length(alien5_freeinfo) then
+    alien5_info[alien5_freeinfo[1]]={x, y,0,0,0}
+    alien5_freeinfo=alien5_freeinfo[2..length(alien5_freeinfo)]
+  else
+
+    alien5_info=append(alien5_info, {x, y,0,0,0} )
+  end if
+end procedure
+
+procedure boss1_bullet_step()
+  integer x,y
+  for i=1 to length(boss1_bullet_info) do
+    if length(boss1_bullet_info[i])>0 then
+      x=boss1_bullet_info[i][1]
+      y=boss1_bullet_info[i][2]
+
+      boss1_bullet_info[i][2]+=8
+      y+=8
+
+      if y>548 then
+        boss1_bullet_info[i]={}
+        boss1_bullet_freeinfo =append(boss1_bullet_freeinfo, i)
+      end if
+
+      draw_sprite( buffer,images[17], x, y)
+    end if
+  end for
+end procedure
+
+procedure create_boss1_bullet(integer x,integer y)
+
+  if length(boss1_bullet_freeinfo) then
+    boss1_bullet_info[boss1_bullet_freeinfo[1]]={x, y,0,0,0}
+    boss1_bullet_freeinfo=boss1_bullet_freeinfo[2..length(boss1_bullet_freeinfo)]
+  else
+
+    boss1_bullet_info=append(boss1_bullet_info, {x, y,0,0,0} )
+  end if
+end procedure
+
+
+atom boss1_x,boss1_y
+boss1_x=0
+boss1_y=0
+integer boss1_live,boss1_image,boss1_dir,boss1_dead,boss1_alarm1,boss1_alarm2
+boss1_live=0
+boss1_image=0
+boss1_dir=0
+boss1_alarm1=0
+boss1_alarm2=0
+
+function check_collision_block1(integer bbx, integer bby) --boss1 hits block1
+  atom x,y
+  
+  for i=1 to length(block1_info) do
+    if length(block1_info[i])>0 then
+      x=block1_info[i][1]
+      y=block1_info[i][2]
+      
+      if check_pp_collision(images[14],images[18] , floor(bbx), floor(bby), floor(x), floor(y))=1 then
+        return i
+      end if
+      
+    end if
+  end for
+
+  return 0
+end function
+
+
+procedure boss1_step()
+
+  if boss1_dir=0 then
+    boss1_x-=5
+  elsif boss1_dir=1 then
+    boss1_x+=5
+  end if
+
+  if boss1_alarm1>0 then
+    boss1_alarm1-=1
+    if boss1_alarm1=0 then
+      boss1_image=1
+      boss1_alarm2=10
+    end if
+  end if
+
+  if boss1_alarm2>0 then
+    boss1_alarm2-=1
+    if boss1_alarm2=0 then
+      boss1_image=0
+      create_boss1_bullet( boss1_x+24, boss1_y+64)
+      create_boss1_bullet( boss1_x+64, boss1_y+64)
+      boss1_alarm1=10
+    end if
+  end if
+
+  if check_collision_block1(boss1_x, boss1_y) then
+    boss1_dir=not(boss1_dir)
+  end if
+
+  draw_sprite( buffer,images[14+boss1_image], boss1_x, boss1_y)
+end procedure
+
+
+procedure block1_step()
+  atom x,y
+  for i=1 to length(block1_info) do
+    if length(block1_info[i])>0 then
+      x=block1_info[i][1]
+      y=block1_info[i][2]
+
+      draw_sprite( buffer,images[18], x, y)
+    end if
+  end for
+end procedure
+
+procedure create_block1(integer x,integer y)
+
+  if length(block1_freeinfo) then
+    block1_info[block1_freeinfo[1]]={x,y,0,0,0}
+    block1_freeinfo=block1_freeinfo[2..length(block1_freeinfo)]
+  else
+
+    block1_info=append(block1_info, {x,y,0,0,0} )
+  end if
+end procedure
+
+
+procedure create_all_paritcals()
+
+  atom x,y
+
+  for i=1 to length(alien1_info) do
+     if length(alien1_info[i]) then
+       x=alien1_info[i][1]
+       y=alien1_info[i][2]
+       create_green(alien1_info[i][1]+15,alien1_info[i][2])
+     end if
+  end for
+
+  for i=1 to length(alien2_info) do
+     if length(alien2_info[i]) then
+       x=alien2_info[i][1]
+       y=alien2_info[i][2]
+       create_red(alien2_info[i][1]+15,alien2_info[i][2])
+     end if
+  end for
+
+  for i=1 to length(alien3_info) do
+     if length(alien3_info[i]) then
+       x=alien3_info[i][1]
+       y=alien3_info[i][2]
+       create_brown(alien3_info[i][1]+15,alien3_info[i][2])
+     end if
+  end for
+
+  for i=1 to length(alien4_info) do
+     if length(alien4_info[i]) then
+       x=alien4_info[i][1]
+       y=alien4_info[i][2]
+       create_brown(alien4_info[i][1]+15,alien4_info[i][2])
+     end if
+  end for
+
+  for i=1 to length(alien5_info) do
+     if length(alien5_info[i]) then
+       x=alien5_info[i][1]
+       y=alien5_info[i][2]
+       create_green(alien5_info[i][1]+15,alien5_info[i][2])
+     end if
+  end for
+
+  alien_bullet1_info={}
+  alien_bullet1_freeinfo={}
+  alien1_info={}
+  alien1_freeinfo={}
+  alien2_info={}
+  alien2_freeinfo={}
+  alien3_info={}
+  alien3_freeinfo={}
+  alien4_info={}
+  alien4_freeinfo={}
+  alien5_info={}
+  alien5_freeinfo={}
+ 
+end procedure
+
+
+function all_enemys_dead()
+
+  if boss1_live=1 then
+    return 0
+  end if
+
+  for i=1 to length(alien1_info) do
+     if length(alien1_info[i]) then
+       return 0
+     end if
+  end for
+
+  for i=1 to length(alien2_info) do
+     if length(alien2_info[i]) then
+       return 0
+     end if
+  end for
+
+  for i=1 to length(alien3_info) do
+     if length(alien3_info[i]) then
+       return 0
+     end if
+  end for
+
+  for i=1 to length(alien4_info) do
+     if length(alien4_info[i]) then
+       return 0
+     end if
+  end for
+
+  for i=1 to length(alien5_info) do
+     if length(alien5_info[i]) then
+       return 0
+     end if
+  end for
+
+  return 1  
+end function
+
+procedure destroy_all_objects()
+  player_x=384
+  player_y=544 
+  player_speed=0 
+  player_direction=0
+  player_sprite_width=34
+  player_sprite_height=30
+  player_friction=1
+  player_alarm0=0
+  player_shoot=TRUE
+  player_bullet_info={}
+  player_bullet_freeinfo={}
+  alien_bullet1_info={}
+  alien_bullet1_freeinfo={}
+  alien1_info={}
+  alien1_freeinfo={}
+  alien2_info={}
+  alien2_freeinfo={}
+  alien3_info={}
+  alien3_freeinfo={}
+  alien4_info={}
+  alien4_freeinfo={}
+  alien5_info={}
+  alien5_freeinfo={}
+  block1_info={}
+  block1_freeinfo={}
+  green_info={}
+  green_freeinfo={}
+  red_info={}
+  red_freeinfo={}
+  brown_info={}
+  brown_freeinfo={}
+  boss1_x=0
+  boss1_y=0
+  boss1_live=0
+  boss1_image=0
+  boss1_dir=0
+  boss1_alarm1=0
+  boss1_alarm2=0
+end procedure
+
+procedure load_title_room()
+create_alien1(160,20)
+create_alien1(160,40)
+create_alien1(160,60)
+create_alien1(160,80)
+create_alien1(160,100)
+create_alien1(190,20)
+create_alien1(220,20)
+create_alien1(220,100)
+create_alien1(220,80)
+create_alien1(220,60)
+create_alien1(220,40)
+create_alien1(190,60)
+create_alien1(280,100)
+create_alien1(280,80)
+create_alien1(280,60)
+create_alien1(280,40)
+create_alien1(280,20)
+create_alien1(310,100)
+create_alien1(370,100)
+create_alien1(370,20)
+create_alien1(370,40)
+create_alien1(370,60)
+create_alien1(370,80)
+create_alien1(430,20)
+create_alien1(430,40)
+create_alien1(430,60)
+create_alien1(430,80)
+create_alien1(430,100)
+create_alien1(460,100)
+create_alien1(460,60)
+create_alien1(460,20)
+create_alien1(520,100)
+create_alien1(520,80)
+create_alien1(520,60)
+create_alien1(520,40)
+create_alien1(520,20)
+create_alien1(610,100)
+create_alien1(610,80)
+create_alien1(610,60)
+create_alien1(610,40)
+create_alien1(610,20)
+create_alien1(550,40)
+create_alien1(580,80)
+create_alien1(580,60)
+create_alien1(550,60)
+create_alien2(70,140)
+create_alien2(100,140)
+create_alien2(130,140)
+create_alien2(130,160)
+create_alien2(130,180)
+create_alien2(130,200)
+create_alien2(130,220)
+create_alien2(70,160)
+create_alien2(70,180)
+create_alien2(70,200)
+create_alien2(70,220)
+create_alien2(100,180)
+create_alien2(190,140)
+create_alien2(220,140)
+create_alien2(250,140)
+create_alien2(220,160)
+create_alien2(220,180)
+create_alien2(220,200)
+create_alien2(220,220)
+create_alien2(310,140)
+create_alien2(340,140)
+create_alien2(370,140)
+create_alien2(340,160)
+create_alien2(340,180)
+create_alien2(340,200)
+create_alien2(340,220)
+create_alien2(430,140)
+create_alien2(460,140)
+create_alien2(490,140)
+create_alien2(490,160)
+create_alien2(490,180)
+create_alien2(430,160)
+create_alien2(430,180)
+create_alien2(430,200)
+create_alien2(430,220)
+create_alien2(460,180)
+create_alien2(490,200)
+create_alien2(490,220)
+create_alien2(550,140)
+create_alien2(550,160)
+create_alien2(550,180)
+create_alien2(550,200)
+create_alien2(550,220)
+create_alien2(580,220)
+create_alien2(580,140)
+create_alien2(640,140)
+create_alien2(640,160)
+create_alien2(640,180)
+create_alien2(640,200)
+create_alien2(640,220)
+create_alien2(670,200)
+create_alien2(670,160)
+create_alien2(700,140)
+create_alien2(700,220)
+end procedure
+
+load_title_room()
+
+procedure load_level1_room()
+create_alien1(25,20)
+create_alien1(55,20)
+create_alien1(85,20)
+create_alien1(115,20)
+create_alien1(145,20)
+create_alien1(175,20)
+create_alien1(205,20)
+create_alien1(55,40)
+create_alien1(85,40)
+create_alien1(115,40)
+create_alien1(145,40)
+create_alien1(175,40)
+create_alien1(85,60)
+create_alien1(115,60)
+create_alien1(145,60)
+create_alien1(175,60)
+create_alien1(205,60)
+create_alien1(235,20)
+create_alien1(265,20)
+create_alien1(295,20)
+create_alien1(325,20)
+create_alien1(355,20)
+create_alien1(385,20)
+create_alien1(415,20)
+create_alien1(445,20)
+create_alien1(475,20)
+create_alien1(505,20)
+create_alien1(535,20)
+create_alien1(565,20)
+create_alien1(595,20)
+create_alien1(625,20)
+create_alien1(655,20)
+create_alien1(685,20)
+create_alien1(715,20)
+create_alien1(745,20)
+create_alien1(715,40)
+create_alien1(685,40)
+create_alien1(655,40)
+create_alien1(625,40)
+create_alien1(595,40)
+create_alien1(565,40)
+create_alien1(535,40)
+create_alien1(505,40)
+create_alien1(475,40)
+create_alien1(445,40)
+create_alien1(685,60)
+create_alien1(655,60)
+create_alien1(625,60)
+create_alien1(595,60)
+create_alien1(565,60)
+create_alien1(535,60)
+create_alien1(505,60)
+create_alien1(475,60)
+create_alien1(445,60)
+create_alien1(205,40)
+create_alien1(235,40)
+create_alien1(265,40)
+create_alien1(295,40)
+create_alien1(325,40)
+create_alien1(355,40)
+create_alien1(385,40)
+create_alien1(415,40)
+create_alien1(235,60)
+create_alien1(265,60)
+create_alien1(295,60)
+create_alien1(325,60)
+create_alien1(355,60)
+create_alien1(415,60)
+create_alien1(115,80)
+create_alien1(145,80)
+create_alien1(175,80)
+create_alien1(205,80)
+create_alien1(235,80)
+create_alien1(265,80)
+create_alien1(295,80)
+create_alien1(325,80)
+create_alien1(145,100)
+create_alien1(175,100)
+create_alien1(175,120)
+create_alien1(205,100)
+create_alien1(205,120)
+create_alien1(235,100)
+create_alien1(235,120)
+create_alien1(205,140)
+create_alien1(235,140)
+create_alien1(235,160)
+create_alien1(265,100)
+create_alien1(265,120)
+create_alien1(265,160)
+create_alien1(265,180)
+create_alien1(295,180)
+create_alien1(295,200)
+create_alien1(325,200)
+create_alien1(325,220)
+create_alien1(655,80)
+create_alien1(625,80)
+create_alien1(625,100)
+create_alien1(595,80)
+create_alien1(595,100)
+create_alien1(595,120)
+create_alien1(565,80)
+create_alien1(565,100)
+create_alien1(565,120)
+create_alien1(565,140)
+create_alien1(535,80)
+create_alien1(535,100)
+create_alien1(535,120)
+create_alien1(535,140)
+create_alien1(535,160)
+create_alien1(505,80)
+create_alien1(505,100)
+create_alien1(505,120)
+create_alien1(505,160)
+create_alien1(505,180)
+create_alien1(475,80)
+create_alien1(445,80)
+create_alien1(445,200)
+create_alien1(445,220)
+create_alien1(475,200)
+create_alien1(475,180)
+create_alien1(475,100)
+create_alien1(415,220)
+create_alien1(415,240)
+create_alien1(355,220)
+create_alien1(355,240)
+create_alien1(385,240)
+create_alien1(385,260)
+create_alien1(290,100)
+end procedure
+
+
+procedure load_level2_room()
+create_alien2(30,20)
+create_alien2(90,20)
+create_alien2(150,20)
+create_alien2(210,20)
+create_alien2(60,40)
+create_alien2(120,40)
+create_alien2(180,40)
+create_alien2(90,60)
+create_alien2(150,60)
+create_alien2(120,80)
+create_alien2(740,20)
+create_alien2(680,20)
+create_alien2(620,20)
+create_alien2(560,20)
+create_alien2(270,20)
+create_alien2(240,40)
+create_alien2(210,60)
+create_alien2(180,80)
+create_alien2(150,100)
+create_alien2(500,20)
+create_alien2(530,40)
+create_alien2(590,40)
+create_alien2(650,40)
+create_alien2(710,40)
+create_alien2(560,60)
+create_alien2(620,60)
+create_alien2(680,60)
+create_alien2(590,80)
+create_alien2(650,80)
+create_alien2(620,100)
+create_alien1(410,40)
+create_alien1(360,40)
+create_alien1(360,60)
+create_alien1(410,60)
+create_alien1(440,60)
+create_alien1(440,80)
+create_alien1(440,100)
+create_alien1(470,100)
+create_alien1(470,120)
+create_alien1(470,140)
+create_alien1(500,140)
+create_alien1(500,160)
+create_alien1(500,180)
+create_alien1(530,180)
+create_alien1(530,200)
+create_alien1(330,60)
+create_alien1(330,80)
+create_alien1(330,100)
+create_alien1(300,100)
+create_alien1(300,120)
+create_alien1(300,140)
+create_alien1(270,140)
+create_alien1(270,160)
+create_alien1(240,180)
+create_alien1(300,160)
+create_alien1(330,120)
+create_alien1(330,140)
+create_alien1(330,160)
+create_alien1(300,180)
+create_alien1(240,200)
+create_alien1(270,180)
+create_alien1(270,200)
+create_alien1(300,200)
+create_alien1(330,180)
+create_alien1(500,200)
+create_alien1(360,80)
+create_alien1(360,100)
+create_alien1(330,200)
+create_alien1(360,120)
+create_alien1(360,140)
+create_alien1(360,160)
+create_alien1(360,180)
+create_alien1(360,200)
+create_alien1(410,80)
+create_alien1(410,100)
+create_alien1(410,120)
+create_alien1(410,140)
+create_alien1(410,160)
+create_alien1(410,180)
+create_alien1(410,200)
+create_alien1(440,120)
+create_alien1(440,140)
+create_alien1(440,160)
+create_alien1(440,180)
+create_alien1(440,200)
+create_alien1(470,160)
+create_alien1(470,180)
+create_alien1(240,240)
+create_alien1(270,240)
+create_alien1(300,240)
+create_alien1(330,240)
+create_alien1(360,240)
+create_alien1(410,240)
+create_alien1(440,240)
+create_alien1(470,240)
+create_alien1(500,240)
+create_alien1(470,200)
+create_alien1(240,260)
+create_alien1(270,260)
+create_alien1(270,280)
+create_alien1(300,260)
+create_alien1(300,280)
+create_alien1(300,300)
+create_alien1(330,260)
+create_alien1(330,280)
+create_alien1(330,300)
+create_alien1(330,320)
+create_alien1(360,260)
+create_alien1(360,280)
+create_alien1(360,300)
+create_alien1(360,320)
+create_alien1(360,340)
+create_alien1(530,240)
+create_alien1(410,260)
+create_alien1(410,280)
+create_alien1(410,300)
+create_alien1(410,320)
+create_alien1(410,340)
+create_alien1(440,260)
+create_alien1(440,280)
+create_alien1(440,300)
+create_alien1(440,320)
+create_alien1(470,260)
+create_alien1(470,280)
+create_alien1(470,300)
+create_alien1(500,260)
+create_alien1(500,280)
+create_alien1(530,260)
+create_alien1(270,300)
+create_alien1(300,320)
+create_alien1(300,340)
+create_alien1(330,340)
+create_alien1(330,360)
+create_alien1(330,380)
+create_alien1(360,360)
+create_alien1(360,380)
+create_alien1(360,400)
+create_alien1(410,360)
+create_alien1(410,380)
+create_alien1(410,400)
+create_alien1(440,340)
+create_alien1(440,360)
+create_alien1(440,380)
+create_alien1(470,320)
+create_alien1(470,340)
+create_alien1(500,300)
+end procedure
+
+
+procedure load_level3_room()
+create_alien2(55,35)
+create_alien2(85,35)
+create_alien2(115,35)
+create_alien2(175,35)
+create_alien2(205,35)
+create_alien2(235,35)
+create_alien2(295,35)
+create_alien2(325,35)
+create_alien2(355,35)
+create_alien2(415,35)
+create_alien2(445,35)
+create_alien2(475,35)
+create_alien2(535,35)
+create_alien2(565,35)
+create_alien2(595,35)
+create_alien2(655,35)
+create_alien2(685,35)
+create_alien2(715,35)
+create_alien1(655,55)
+create_alien1(685,55)
+create_alien1(715,55)
+create_alien1(535,55)
+create_alien1(565,55)
+create_alien1(595,55)
+create_alien1(415,55)
+create_alien1(445,55)
+create_alien1(475,55)
+create_alien1(295,55)
+create_alien1(325,55)
+create_alien1(355,55)
+create_alien1(175,55)
+create_alien1(205,55)
+create_alien1(235,55)
+create_alien1(55,55)
+create_alien1(85,55)
+create_alien2(55,75)
+create_alien2(85,75)
+create_alien2(115,75)
+create_alien2(175,75)
+create_alien2(205,75)
+create_alien2(235,75)
+create_alien2(295,75)
+create_alien2(325,75)
+create_alien2(355,75)
+create_alien2(415,75)
+create_alien2(445,75)
+create_alien2(475,75)
+create_alien2(535,75)
+create_alien2(565,75)
+create_alien2(655,75)
+create_alien2(685,75)
+create_alien2(715,75)
+create_alien2(145,55)
+create_alien2(265,55)
+create_alien2(385,55)
+create_alien2(25,55)
+create_alien2(505,55)
+create_alien2(625,55)
+create_alien2(745,55)
+create_alien1(745,75)
+create_alien1(625,75)
+create_alien1(505,75)
+create_alien1(385,75)
+create_alien1(265,75)
+create_alien1(145,75)
+create_alien1(25,75)
+create_alien1(115,55)
+create_alien2(595,75)
+create_alien3(505,35)
+create_alien3(745,35)
+create_alien3(265,35)
+create_alien3(25,35)
+create_alien1(145,35)
+create_alien1(385,35)
+create_alien1(625,35)
+end procedure
+
+procedure load_level4_room()
+create_alien2(10,60)
+create_alien2(310,60)
+create_alien2(250,60)
+create_alien2(190,60)
+create_alien2(130,60)
+create_alien2(70,60)
+create_alien1(40,60)
+create_alien1(100,60)
+create_alien1(160,60)
+create_alien1(220,60)
+create_alien1(280,60)
+create_alien1(730,60)
+create_alien1(670,60)
+create_alien1(610,60)
+create_alien1(550,60)
+create_alien1(490,60)
+create_alien1(430,60)
+create_alien2(370,60)
+create_alien2(760,60)
+create_alien2(700,60)
+create_alien2(640,60)
+create_alien2(580,60)
+create_alien2(520,60)
+create_alien2(460,60)
+create_alien2(400,60)
+create_alien1(340,60)
+create_alien3(370,40)
+create_alien3(400,40)
+create_alien3(760,40)
+create_alien3(580,40)
+create_alien3(10,40)
+create_alien3(190,40)
+create_alien1(40,40)
+create_alien1(70,40)
+create_alien1(160,40)
+create_alien1(130,40)
+create_alien1(100,40)
+create_alien1(220,40)
+create_alien1(250,40)
+create_alien1(280,40)
+create_alien1(310,40)
+create_alien1(340,40)
+create_alien1(430,40)
+create_alien1(460,40)
+create_alien1(490,40)
+create_alien1(520,40)
+create_alien1(550,40)
+create_alien1(610,40)
+create_alien1(640,40)
+create_alien1(670,40)
+create_alien1(700,40)
+create_alien1(730,40)
+create_alien4(10,90)
+create_alien4(40,100)
+create_alien4(70,110)
+create_alien4(100,120)
+create_alien4(130,130)
+create_alien4(160,140)
+create_alien4(190,150)
+create_alien4(220,160)
+create_alien4(250,170)
+create_alien4(280,180)
+create_alien4(310,190)
+create_alien4(340,200)
+create_alien4(760,90)
+create_alien4(730,100)
+create_alien4(700,110)
+create_alien4(670,120)
+create_alien4(640,130)
+create_alien4(610,140)
+create_alien4(580,150)
+create_alien4(550,160)
+create_alien4(520,170)
+create_alien4(490,180)
+create_alien4(460,190)
+create_alien4(430,200)
+create_alien4(385,215)
+end procedure
+
+procedure load_level5_room()
+create_alien5(25,40)
+create_alien5(55,60)
+create_alien5(85,80)
+create_alien5(115,100)
+create_alien5(145,120)
+create_alien5(175,140)
+create_alien5(205,160)
+create_alien5(235,180)
+create_alien5(265,200)
+create_alien5(745,40)
+create_alien5(715,60)
+create_alien5(685,80)
+create_alien5(655,100)
+create_alien5(625,120)
+create_alien5(595,140)
+create_alien5(565,160)
+create_alien5(535,180)
+create_alien5(505,200)
+create_alien5(475,220)
+create_alien5(445,240)
+create_alien5(415,260)
+create_alien5(385,280)
+create_alien5(295,220)
+create_alien5(325,240)
+create_alien5(355,260)
+create_alien4(715,40)
+create_alien4(685,60)
+create_alien4(655,80)
+create_alien4(625,100)
+create_alien4(595,120)
+create_alien4(565,140)
+create_alien4(535,160)
+create_alien4(505,180)
+create_alien4(475,200)
+create_alien4(445,220)
+create_alien4(415,240)
+create_alien4(385,260)
+create_alien4(355,240)
+create_alien4(325,220)
+create_alien4(295,200)
+create_alien4(265,180)
+create_alien4(235,160)
+create_alien4(205,140)
+create_alien4(175,120)
+create_alien4(145,100)
+create_alien4(115,80)
+create_alien4(85,60)
+create_alien4(55,40)
+create_alien2(85,40)
+create_alien2(115,60)
+create_alien2(145,80)
+create_alien2(175,100)
+create_alien2(205,120)
+create_alien2(235,140)
+create_alien2(265,160)
+create_alien2(295,180)
+create_alien2(325,200)
+create_alien2(355,220)
+create_alien2(385,240)
+create_alien2(415,220)
+create_alien2(445,200)
+create_alien2(475,180)
+create_alien2(505,160)
+create_alien2(685,40)
+create_alien2(655,60)
+create_alien2(625,80)
+create_alien2(595,100)
+create_alien2(565,120)
+create_alien2(535,140)
+create_alien1(625,60)
+create_alien1(595,80)
+create_alien1(565,100)
+create_alien1(535,120)
+create_alien1(505,140)
+create_alien1(475,160)
+create_alien1(445,180)
+create_alien1(415,200)
+create_alien1(385,220)
+create_alien1(355,200)
+create_alien1(325,180)
+create_alien1(295,160)
+create_alien1(265,140)
+create_alien1(145,60)
+create_alien1(175,80)
+create_alien1(205,100)
+create_alien1(235,120)
+create_alien2(385,200)
+create_alien2(415,180)
+create_alien2(445,160)
+create_alien2(475,140)
+create_alien2(505,120)
+create_alien2(355,180)
+create_alien2(325,160)
+create_alien2(295,140)
+create_alien2(265,120)
+create_alien2(235,100)
+create_alien2(205,80)
+create_alien2(175,60)
+create_alien2(595,60)
+create_alien2(565,80)
+create_alien2(535,100)
+create_alien2(625,40)
+create_alien2(145,40)
+create_alien1(115,40)
+create_alien1(655,40)
+end procedure
+
+procedure load_boss1_room()
+create_block1(0,120)
+create_block1(0,140)
+create_block1(0,160)
+create_block1(0,180)
+create_block1(0,200)
+create_block1(0,220)
+create_block1(0,240)
+create_block1(0,100)
+create_block1(0,80)
+create_block1(0,60)
+create_block1(0,40)
+create_block1(0,20)
+create_block1(0,0)
+create_block1(0,360)
+create_block1(0,340)
+create_block1(0,320)
+create_block1(0,300)
+create_block1(0,280)
+create_block1(0,260)
+create_block1(0,440)
+create_block1(0,420)
+create_block1(0,400)
+create_block1(0,380)
+create_block1(0,540)
+create_block1(0,520)
+create_block1(0,500)
+create_block1(0,480)
+create_block1(0,460)
+create_block1(0,560)
+create_block1(0,580)
+create_block1(780,580)
+create_block1(780,560)
+create_block1(780,540)
+create_block1(780,520)
+create_block1(780,500)
+create_block1(780,480)
+create_block1(780,460)
+create_block1(780,440)
+create_block1(780,420)
+create_block1(780,400)
+create_block1(780,380)
+create_block1(780,360)
+create_block1(780,340)
+create_block1(780,320)
+create_block1(780,300)
+create_block1(780,280)
+create_block1(780,260)
+create_block1(780,240)
+create_block1(780,220)
+create_block1(780,200)
+create_block1(780,180)
+create_block1(780,160)
+create_block1(780,140)
+create_block1(780,120)
+create_block1(780,100)
+create_block1(780,80)
+create_block1(780,60)
+create_block1(780,40)
+create_block1(780,20)
+create_block1(780,0)
+
+boss1_x=350
+boss1_y=50
+boss1_live=1
+boss1_dead=0
+boss1_image=0
+boss1_dir=0
+boss1_alarm1=10
+boss1_alarm2=0
+
+end procedure
+
+procedure load_next_room()
+  if current_room=1 then
+    load_level1_room()
+  elsif current_room=2 then
+    load_level2_room()
+  elsif current_room=3 then
+    load_level3_room()
+  elsif current_room=4 then
+    load_level4_room()
+  elsif current_room=5 then
+    load_level5_room()
+  elsif current_room=6 then
+    load_boss1_room()
+  end if
+end procedure
+
+procedure draw_star_background()
+  blit(backgrounds[1],buffer,0,0,0,0,400,300) 
+  blit(backgrounds[1],buffer,0,0,400,0,400,300)
+  blit(backgrounds[1],buffer,0,0,0,300,400,300)
+  blit(backgrounds[1],buffer,0,0,400,300,400,300)
+end procedure
+
+procedure draw_ground_background()
+  blit(backgrounds[2],buffer,0,0,0,572,282,28) 
+  blit(backgrounds[2],buffer,0,0,282,572,282,28)
+  blit(backgrounds[2],buffer,0,0,564,572,282,28)
+end procedure
+
+procedure draw_ground_bar()
+  blit(ground_bar,buffer,0,0,0,ground_bar_y,800,10) 
+end procedure
+
+
+while 1 do
+
+
+if game_end=1 then
+  exit
+end if
+
+fps1+=1
+
+if timer1<time() then
+  timer1=time()+1
+  fps2=fps1
+  fps1=0
+   if fps2>limit then
+     if (fps2-limit)>50 then
+       wait+=20
+     elsif (fps2-limit)>30 then
+       wait+=10
+     elsif (fps2-limit)>10 then
+       wait+=5
+     elsif (fps2-limit)>9 then
+       wait+=9
+     elsif (fps2-limit)>8 then
+       wait+=8
+     elsif (fps2-limit)>7 then
+       wait+=7
+     elsif (fps2-limit)>6 then
+       wait+=6
+
+     elsif (fps2-limit)>5 then
+       wait+=5
+     elsif (fps2-limit)>4 then
+       wait+=4
+     elsif (fps2-limit)>3 then
+       wait+=3
+     elsif (fps2-limit)>2 then
+       wait+=2
+     elsif (fps2-limit)>1 then
+       wait+=1
+     elsif (fps2-limit)>0 then
+       wait+=(fps2-limit)
+     end if
+   elsif fps2<limit then
+     if (fps2-limit)<-50 then
+       wait-=20
+     elsif (fps2-limit)<-30 then
+       wait-=10
+     elsif (fps2-limit)<-10 then
+       wait-=10
+     elsif (fps2-limit)<-9 then
+       wait-=9
+     elsif (fps2-limit)<-8 then
+       wait-=8
+     elsif (fps2-limit)<-7 then
+       wait-=7
+     elsif (fps2-limit)<-6 then
+       wait-=6
+     elsif (fps2-limit)<-5 then
+       wait-=5
+     elsif (fps2-limit)<-4 then
+       wait-=4
+     elsif (fps2-limit)<-3 then
+       wait-=3
+     elsif (fps2-limit)<-2 then
+       wait-=2
+     elsif (fps2-limit)<-1 then
+       wait-=1
+     end if
+   end if
+end if
+
+
+if game_mode=0 then
+
+  time1+=1
+  if time1>6 then
+
+    if key(KEY_ESC) then
+      time1=0
+      exit
+    end if
+
+    if key(KEY_ENTER) then
+      game_mode=1
+      time1=0
+      destroy_all_objects()
+      
+      current_room=1
+      load_next_room()
+
+    end if
+
+    if key(KEY_C) then
+      time1=0
+      clear_keybuf()
+      create_all_paritcals()
+    end if
+
+  end if
+
+ 
+  clear_bitmap(buffer)
+  
+  
+  draw_star_background()
+  draw_ground_background()
+  --draw_ground_bar()
+  
+  blit(messages[1],buffer,0,0,111,325,577,42)
+
+  player_bullet_step()
+  player_step()
+  alien1_step()
+  alien2_step()
+  green_step()
+  red_step()
+  
+  textout_ex(buffer,font, sprint(fps2) ,20, 20, rgb(255,255,255),-1 )
+  blit(buffer,screen,0,0,0,0,window_width,window_height)
+
+elsif game_mode=1 then
+  time1+=1
+  if time1>6 then
+
+    if key(KEY_ESC) and game_pause=0 then
+      time1=0
+      game_pause=1
+      check_exit=1
+      blit(messages[2],buffer,0,0,202,325,404,85)
+    end if
+    
+    if key(KEY_P) and game_pause=0 then
+      time1=0
+      clear_keybuf()
+      game_pause=not(game_pause)
+      blit(messages[3],buffer,0,0,110,325,578,83)
+    end if
+
+    if check_exit=1 then
+      if key(KEY_N) then
+        game_pause=0
+        check_exit=0
+      end if
+      if key(KEY_Y) then
+        destroy_all_objects()
+        load_title_room()
+        game_mode=0
+        game_pause=0
+        check_exit=0
+      end if
+    end if
+  end if
+
+  if game_pause=1 and check_exit=0 and time1>6 then --game paused
+    if keypressed() then 
+      time1=0
+      game_pause=0
+    end if
+  end if
+
+  if game_pause=0 then 
+
+    if time1>30 then
+      if key(KEY_N) then
+        time1=0
+        clear_keybuf()
+        destroy_all_objects()
+        current_room+=1
+        load_next_room()
+      end if
+      if key(KEY_C) then
+        time1=0
+        clear_keybuf()
+        create_all_paritcals()
+      end if
+    end if
+
+    clear_bitmap(buffer)
+  
+    draw_star_background()
+    draw_ground_background()
+  
+    player_bullet_step()
+    player_step()
+    alien1_step()
+    alien2_step()
+    alien3_step()
+    alien4_step()
+    alien5_step()
+    alien_bullet1_step()
+     
+    block1_step()
+
+    green_step()
+    brown_step()
+    red_step()
+
+    if boss1_live=1 then
+      boss1_step()
+    end if
+    boss1_bullet_step()
+ 
+    if all_enemys_dead() then
+      destroy_all_objects()
+      current_room+=1
+      load_next_room()
+    end if
+  
+    textout_ex(buffer,font, sprint(fps2) ,20, 20, rgb(255,255,255),-1 )
+  end if
+  
+  blit(buffer,screen,0,0,0,0,window_width,window_height)
+  
+end if
+
+  delay(wait)
+end while
+
+for i=1 to length(backgrounds) do
+  destroy_bitmap(backgrounds[i])
+end for
+for i=1 to length(messages) do
+  destroy_bitmap(messages[i])
+end for
+for i=1 to length(images) do
+  destroy_bitmap(images[i])
+end for
+for i=1 to length(alien_bullets) do
+  destroy_bitmap(alien_bullets[i])
+end for
+for i=1 to length(music) do
+  destroy_midi(music[i])
+end for
+
+destroy_sample(player_shoot_sfx)
+destroy_sample(destroy1_sfx)
+destroy_sample(destroy2_sfx)
+destroy_sample(destroy3_sfx)
+destroy_sample(destroy4_sfx)
+destroy_sample(destroy5_sfx)
+destroy_palette(the_palette)
+destroy_bitmap(buffer)
+destroy_bitmap(ground_bar)
+
+allegro_exit()

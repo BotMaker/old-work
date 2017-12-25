@@ -1,0 +1,360 @@
+
+sequence collision_list
+collision_list={}
+
+sequence depth_list,index_list
+depth_list={}
+index_list={}
+
+
+procedure depth_sort()
+    integer gap, j, first, last
+    object tempi, tempj, tempi2, tempj2
+
+    last = length(depth_list)
+    gap = floor(last / 10) + 1
+    while 1 do
+	first = gap + 1
+	for i = first to last do
+	    tempi = depth_list[i]
+            tempi2 = index_list[i]
+	    j = i - gap
+	    while 1 do
+		tempj = depth_list[j]
+                --gaz new
+                  tempj2= index_list[j]
+		if compare(tempi, tempj) >= 0 then
+		    j += gap
+		    exit
+		end if
+		depth_list[j+gap] = tempj
+                --gaz new
+                  index_list[j+gap]=tempj2
+		if j <= gap then
+		    exit
+		end if
+		j -= gap
+	    end while
+	    depth_list[j] = tempi
+            --gaz new
+              index_list[j]=tempi2
+	end for
+	if gap = 1 then
+	    return 
+	else
+	    gap = floor(gap / 3.5) + 1
+	end if
+    end while
+end procedure
+
+global procedure sprite_draw(integer line_number)
+atom temp_image,image_timer,image_speed
+integer image_number,image_single,image_index,width,height,offsetx,offsety,x,y,transparent
+  image_number=instance_info[line_number][INS_SPR_IMAGE_NUMBER]
+
+ if image_number>-1 then
+  x=floor(instance_info[line_number][INS_X])
+  y=floor(instance_info[line_number][INS_Y])
+  width=instance_info[line_number][INS_SPR_WIDTH]
+  height=instance_info[line_number][INS_SPR_HEIGHT]
+  image_timer=instance_info[line_number][INS_IMAGE_TIMER]
+  image_index=instance_info[line_number][INS_IMAGE_INDEX]
+  image_single=instance_info[line_number][INS_IMAGE_SINGLE]
+  image_speed=instance_info[line_number][INS_IMAGE_SPEED]
+  offsetx=instance_info[line_number][INS_SPR_OFFSETX]
+  offsety=instance_info[line_number][INS_SPR_OFFSETY]
+  transparent=instance_info[line_number][INS_SPR_TRANSPARENT]
+
+  if image_single<0 then-- should be if image single is small than 0
+    image_timer+=0.1
+    if image_timer>image_speed then
+      image_timer=0
+      image_index+=1
+      if image_index>image_number then
+        image_index=0
+      end if
+    end if
+    instance_info[line_number][INS_IMAGE_INDEX]=image_index
+    instance_info[line_number][INS_IMAGE_SPEED]=image_speed
+    instance_info[line_number][INS_IMAGE_TIMER]=image_timer
+    temp_image=instance_info[line_number][INS_SPR_IMAGES][image_index+1]
+  else
+
+    if image_single>image_number then
+      image_single=0
+      instance_info[line_number][INS_IMAGE_SINGLE]=0
+    end if
+    temp_image=instance_info[line_number][INS_SPR_IMAGES][image_single+1]
+  end if
+
+
+  if transparent=1 then
+    draw_sprite( buffer, temp_image ,(x-offsetx)-view_left, (y-offsety)-view_top )
+  else
+    blit(temp_image, buffer, 0, 0, (x-offsetx)-view_left, (y-offsety)-view_top, width, height)
+  end if
+
+ end if
+
+
+  --if ((x-offsetx)+width)>view_left and (x-offsetx)<(view_left+view_width) and ((y-offsety)+height)>view_top and (y-offsety)<(view_top+view_height) then
+    --rect( buffer,(x-offsetx)-view_left, (y-offsety)-view_top,(x-offsetx)+width-view_left,(y-offsety)+height-view_top,rgb(255,0,0) )
+    --rect( buffer,(x-offsetx)+instance_info[line_number][INS_SPR_BBOX_LEFT]-view_left,(y-offsety)+instance_info[line_number][INS_SPR_BBOX_TOP]-view_top,
+    --(x-offsetx)+instance_info[line_number][INS_SPR_BBOX_RIGHT]-view_left,(y-offsety)+instance_info[line_number][INS_SPR_BBOX_BOTTOM]-view_top ,rgb(255,255,255) )
+  --end if
+end procedure
+
+
+function check_collision(integer line_number , integer object_index)
+  integer x1,y1,left1,top1,right1,bottom1,offsetx1,offsety1
+  integer x2,y2,left2,top2,right2,bottom2,offsetx2,offsety2
+  integer checking,image_single
+  integer width,height
+  atom image1,image2
+
+  x1=floor(instance_info[line_number][INS_X])
+  y1=floor(instance_info[line_number][INS_Y])
+  left1=instance_info[line_number][INS_SPR_BBOX_LEFT]
+  top1=instance_info[line_number][INS_SPR_BBOX_TOP]
+  right1=instance_info[line_number][INS_SPR_BBOX_RIGHT]
+  bottom1=instance_info[line_number][INS_SPR_BBOX_BOTTOM]
+  offsetx1=instance_info[line_number][INS_SPR_OFFSETX]
+  offsety1=instance_info[line_number][INS_SPR_OFFSETY]
+
+  checking=instance_info[line_number][INS_SPR_CHECKING]
+
+
+
+if checking=0 then-- bound box
+  x1=(x1+left1-offsetx1)
+  y1=(y1+top1-offsety1)
+  right1=(right1-left1)
+  bottom1=(bottom1-top1)
+
+  for i=1 to length(instance_info) do
+    if i != line_number and instance_info[i][INS_OBJ_ID]=object_index and instance_info[i][INS_ALIVE]=1 then
+      x2=floor(instance_info[i][INS_X])
+      y2=floor(instance_info[i][INS_Y])
+      left2=instance_info[i][INS_SPR_BBOX_LEFT]
+      top2=instance_info[i][INS_SPR_BBOX_TOP]
+      right2=instance_info[i][INS_SPR_BBOX_RIGHT]
+      bottom2=instance_info[i][INS_SPR_BBOX_BOTTOM]
+      offsetx2=instance_info[i][INS_SPR_OFFSETX]
+      offsety2=instance_info[i][INS_SPR_OFFSETY]
+
+      x2=(x2+left2-offsetx2)
+      y2=(y2+top2-offsety2)
+      right2=(right2-left2)
+      bottom2=(bottom2-top2)
+
+      if check_bb_collision_general(x1, y1, right1, bottom1, x2, y2, right2, bottom2)=1 then
+        if instance_info[i][INS_OBJ_SOLID]=1 then 
+          collision_list=append(collision_list,line_number)
+        end if 
+        return i
+
+      end if
+    end if
+  end for
+else-- pixel prefect
+  x1=(x1-offsetx1)
+  y1=(y1-offsety1)
+  image_single=instance_info[line_number][INS_IMAGE_SINGLE]
+  if image_single<0 then
+    image_single=instance_info[line_number][INS_IMAGE_INDEX]
+  end if
+  image1=instance_info[line_number][INS_SPR_IMAGES][image_single+1]
+
+
+  for i=1 to length(instance_info) do
+    if i != line_number and instance_info[i][INS_OBJ_ID]=object_index and instance_info[i][INS_ALIVE]=1 then
+      x2=floor(instance_info[i][INS_X])
+      y2=floor(instance_info[i][INS_Y])
+      left2=instance_info[i][INS_SPR_BBOX_LEFT]
+      top2=instance_info[i][INS_SPR_BBOX_TOP]
+      offsetx2=instance_info[i][INS_SPR_OFFSETX]
+      offsety2=instance_info[i][INS_SPR_OFFSETY]
+
+      x2=(x2-offsetx2)
+      y2=(y2-offsety2)
+      image_single=instance_info[i][INS_IMAGE_SINGLE]
+      if image_single<0 then
+        image_single=instance_info[i][INS_IMAGE_INDEX]
+      end if
+      image2=instance_info[i][INS_SPR_IMAGES][image_single+1]
+      if check_pp_collision(image1, image2, x1, y1, x2, y2)=1 then
+        if instance_info[i][INS_OBJ_SOLID]=1 then 
+          collision_list=append(collision_list,line_number)
+        end if
+        return i
+      end if
+    end if
+  end for
+end if
+
+  return -1
+end function
+
+
+
+procedure set_xy_to_pxy_for_all()
+  for i=1 to length(collision_list) do
+    instance_info[collision_list[i]][INS_X] =instance_info[collision_list[i]][INS_PX]
+    instance_info[collision_list[i]][INS_Y] =instance_info[collision_list[i]][INS_PY]
+  end for
+  collision_list={}
+end procedure
+
+procedure move(integer line_number)
+integer dir
+atom hspeed,vspeed,speed,friction
+
+  hspeed=instance_info[line_number][INS_HSPEED]
+  vspeed=instance_info[line_number][INS_VSPEED]
+  friction=instance_info[line_number][INS_FRICTION]
+  speed=instance_info[line_number][INS_SPEED]
+
+  
+
+  if instance_info[line_number][INS_GRAVITY_SPEED]!=0 then
+    speed=instance_info[line_number][INS_GRAVITY_SPEED]
+    if friction>0 and speed>0 then
+      speed-=friction
+      if speed<0 then
+        speed=instance_info[line_number][INS_GRAVITY_SPEED]
+      end if
+    end if
+    dir=instance_info[line_number][INS_GRAVITY_DIR]+1
+    hspeed += speed*cos_loTRUE2up[dir]
+    vspeed += speed*sin_loTRUE2up[dir]
+    instance_info[line_number][INS_HSPEED] = hspeed
+    instance_info[line_number][INS_VSPEED] = vspeed
+  end if
+
+  if friction>0 and speed>0 then
+    speed-=friction
+    if speed<0 then
+      instance_info[line_number][INS_SPEED]=0
+      speed=0
+    end if
+    instance_info[line_number][INS_SPEED]=speed
+  end if
+
+  speed=instance_info[line_number][INS_SPEED]
+  if speed!=0 then
+    dir=instance_info[line_number][INS_DIR]+1
+    hspeed += speed*cos_loTRUE2up[dir]
+    vspeed += speed*sin_loTRUE2up[dir]
+  end if
+
+  instance_info[line_number][INS_X] += hspeed
+  instance_info[line_number][INS_Y] += vspeed
+  
+end procedure
+
+
+
+global procedure game_step()
+integer found
+
+destory_list={}
+
+
+if mouse_global_releasd=1 and mouse_button=mb_left then
+  for i=1 to length(mouse_left_releasd_list) do
+   
+    ret=mouse_left_releasd_list[i]
+    if ret!=-1 then
+      if view_mousex>=instance_info[ret][INS_X] and view_mousex<=instance_info[ret][INS_X]+instance_info[ret][INS_SPR_WIDTH] and
+         view_mousey>=instance_info[ret][INS_Y] and view_mousey<=instance_info[ret][INS_Y]+instance_info[ret][INS_SPR_HEIGHT] then
+        self=ret
+        call_proc(instance_info[ret][INS_OBJ_ROUTINEID], {EVENT_MOUSE_LEFT_RELEASED})
+      end if
+    end if
+  end for
+end if
+
+if mouse_global_releasd=1 then
+  for i=1 to length(mouse_global_releasd_list) do
+    ret=mouse_global_releasd_list[i]
+    self=ret
+    call_proc(instance_info[ret][INS_OBJ_ROUTINEID], {EVENT_MOUSE_GLOBAL_RELEASED})
+  end for
+end if
+
+
+
+if mouse_global_pressed=1 then
+  for i=1 to length(mouse_global_pressed_list) do
+    ret=mouse_global_pressed_list[i]
+    self=ret
+    call_proc(instance_info[ret][INS_OBJ_ROUTINEID], {EVENT_MOUSE_GLOBAL_PRESSED})
+  end for
+end if
+
+
+  -- step event
+  for i=1 to length(instance_info) do
+     
+     if sequence(instance_info[i]) then
+
+       
+
+     if instance_info[i][INS_OBJ_EVENTS][EVENT_STEP][EVENT_ON]=1 then
+       -- call procedure
+       self=i
+       call_proc(instance_info[i][INS_OBJ_ROUTINEID], {EVENT_STEP})
+     end if
+       instance_info[i][INS_PX]=instance_info[i][INS_X]
+       instance_info[i][INS_PY]=instance_info[i][INS_Y]
+     move(i)
+       
+     end if
+  end for
+  
+
+
+  -- ok this set all soild objects back to there px py postions
+  -- might be a bug because only one is add two the list but both are soild
+
+  set_xy_to_pxy_for_all()
+
+
+
+  -- draw event first the depth list is sorted into order
+  depth_list={}
+  index_list={}
+  for i=1 to length(drawlist) do
+    if drawlist[i]!=-1 then
+      depth_list&=instance_info[ drawlist[i] ][ INS_OBJ_DEPTH ]
+      index_list&=drawlist[i]
+    end if
+  end for
+  depth_sort()
+
+  -- now the draw event is executed
+  for i=1 to length(index_list) do
+    ret=index_list[i]
+    if instance_info[ret][INS_OBJ_EVENTS][EVENT_DRAW][EVENT_ON]=0 then
+      sprite_draw(ret)
+    else
+      -- call procedure
+      self=ret
+      call_proc(instance_info[ret][INS_OBJ_ROUTINEID], {EVENT_DRAW})
+    end if
+  end for
+
+
+  for i=1 to length(animation_end_list) do
+    ret=animation_end_list[i]
+    if ret!=-1 then
+      self=ret
+      call_proc(instance_info[ret][INS_OBJ_ROUTINEID], {EVENT_ANIMATION_END})
+    end if
+  end for
+
+  for i=1 to length(destory_list) do
+    destory(destory_list[i])
+  end for
+
+end procedure

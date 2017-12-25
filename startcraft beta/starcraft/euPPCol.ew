@@ -1,0 +1,154 @@
+--
+-- euPPCol -
+--
+-- Ray Smith 20/08/2002
+--
+
+
+--*************************************************
+-- Includes
+--*************************************************
+--include wrapper.ew
+include wrapper.ew
+
+atom euPPColLib
+euPPColLib = link_dll("euPPCol42.dll")
+
+
+-- constants for checking collision amounts
+global constant
+   PPCAMOUNT_UP         = {0, -1},
+   PPCAMOUNT_UP_RIGHT   = {1, -1},
+   PPCAMOUNT_RIGHT      = {1, 0},
+   PPCAMOUNT_DOWN_RIGHT = {1, 1},
+   PPCAMOUNT_DOWN       = {0, 1},
+   PPCAMOUNT_DOWN_LEFT  = {-1, 1},
+   PPCAMOUNT_LEFT       = {-1, 0},
+   PPCAMOUNT_UP_LEFT    = {-1, -1}
+
+
+-----------------------------
+-- check_pp_collision  
+-----------------------------
+integer my_check_pp_collision
+my_check_pp_collision = link_func(euPPColLib, "eu_check_pp_collision", 
+           {C_POINTER, C_POINTER, C_INT, C_INT, C_INT, C_INT}, C_INT) 
+global function check_pp_collision(atom spr1, atom spr2, 
+        integer x1, integer y1, integer x2, integer y2) 
+   return c_func(my_check_pp_collision,{spr1, spr2, x1, y1, x2, y2})
+end function
+
+-----------------------------
+-- create_ppcol_mask  
+-----------------------------
+integer my_create_ppcol_mask
+my_create_ppcol_mask = link_func(euPPColLib, "eu_create_ppcol_mask", 
+           {C_POINTER}, C_POINTER) 
+global function create_ppcol_mask(atom spr) 
+   return c_func(my_create_ppcol_mask,{spr})
+end function
+
+-----------------------------
+-- destroy_ppcol_mask  
+-----------------------------
+integer my_destroy_ppcol_mask
+my_destroy_ppcol_mask = link_proc(euPPColLib, "eu_destroy_ppcol_mask", 
+           {C_POINTER}) 
+global procedure destroy_ppcol_mask(atom mask) 
+   c_proc(my_destroy_ppcol_mask,{mask})
+end procedure
+
+-----------------------------
+-- check_ppmask_collision  
+-----------------------------
+integer my_check_ppmask_collision
+my_check_ppmask_collision = link_func(euPPColLib, 
+         "eu_check_ppmask_collision", {C_POINTER, C_POINTER, 
+         C_INT, C_INT, C_INT, C_INT}, C_INT) 
+global function check_ppmask_collision(atom mask1, atom mask2, 
+        integer x1, integer y1, integer x2, integer y2) 
+   return c_func(my_check_ppmask_collision,{mask1, mask2, x1, y1, x2, y2})
+end function
+
+-----------------------------
+-- check_bb_collision_general  
+-----------------------------
+integer my_check_bb_collision_general
+my_check_bb_collision_general = link_func(euPPColLib, 
+         "eu_check_bb_collision_general", {C_INT, C_INT, C_INT, C_INT, 
+         C_INT, C_INT, C_INT, C_INT}, C_INT) 
+global function check_bb_collision_general(integer x1, integer y1, integer w1,
+        integer h1, integer x2, integer y2, integer w2, integer h2) 
+   return c_func(my_check_bb_collision_general,
+                           {x1, y1, w1, h1, x2, y2, w2, h2})
+end function
+
+-----------------------------
+-- check_bb_collision_bmp
+-----------------------------
+integer my_check_bb_collision_bmp
+my_check_bb_collision_bmp = link_func(euPPColLib, 
+         "eu_check_bb_collision_bmp", {C_POINTER, C_POINTER, C_INT, C_INT, 
+         C_INT, C_INT}, C_INT) 
+global function check_bb_collision_bmp(atom bmp1, atom bmp2, 
+          integer x1, integer y1, integer x2, integer y2) 
+   return c_func(my_check_bb_collision_bmp,
+                           {bmp1, bmp2, x1, y1, x2, y2})
+end function
+
+-----------------------------
+-- check_bb_collision_mask
+-----------------------------
+integer my_check_bb_collision_mask
+my_check_bb_collision_mask = link_func(euPPColLib, 
+         "eu_check_bb_collision_mask", {C_POINTER, C_POINTER, C_INT, C_INT, 
+         C_INT, C_INT}, C_INT) 
+global function check_bb_collision_mask(atom mask1, atom mask2, 
+          integer x1, integer y1, integer x2, integer y2) 
+   return c_func(my_check_bb_collision_mask,
+                           {mask1, mask2, x1, y1, x2, y2})
+end function
+
+-----------------------------
+-- get_ppcol_version_str
+-----------------------------
+integer my_ppcol_version_str
+my_ppcol_version_str = link_func(euPPColLib, "eu_ppcol_version_str", 
+                       {}, C_POINTER)
+global function PPCOL_VERSION_STR()
+   atom ret_addr
+   sequence ret_seq
+
+   ret_addr = allocate(64)
+   ret_addr = c_func(my_ppcol_version_str, {})
+   ret_seq = peek_sequence(ret_addr, 64)
+   free(ret_addr)
+   return ret_seq
+end function
+
+-----------------------------
+-- check_pp_collision_amount
+-----------------------------
+integer my_check_pp_collision_amount
+my_check_pp_collision_amount = link_func(euPPColLib, 
+         "eu_check_pp_collision_amount", {C_POINTER, C_POINTER, C_INT, C_INT, 
+         C_INT, C_INT, C_INT, C_INT}, C_INT) 
+global function check_pp_collision_amount(atom bmp1, atom bmp2, 
+          integer x1, integer y1, integer x2, integer y2, sequence d) 
+   return c_func(my_check_pp_collision_amount,
+                           {bmp1, bmp2, x1, y1, x2, y2, d[1], d[2]})
+end function
+
+-----------------------------
+-- check_ppmask_collision_amount
+-----------------------------
+integer my_check_ppmask_collision_amount
+my_check_ppmask_collision_amount = link_func(euPPColLib, 
+         "eu_check_ppmask_collision_amount", 
+      {C_POINTER, C_POINTER, C_INT, C_INT, C_INT, C_INT, C_INT, C_INT}, C_INT) 
+global function check_ppmask_collision_amount(atom mask1, atom mask2, 
+          integer x1, integer y1, integer x2, integer y2, sequence d) 
+   return c_func(my_check_ppmask_collision_amount,
+                           {mask1, mask2, x1, y1, x2, y2, d[1], d[2]})
+end function
+

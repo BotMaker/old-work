@@ -1,0 +1,447 @@
+global sequence instance_info,free_instance_info
+instance_info={}
+free_instance_info={}
+
+global constant EMPTY_HANDLE=-1
+
+
+--object information
+global constant INS_OBJ_ID=1
+global constant INS_OBJ_EVENTS=2
+global constant INS_OBJ_VISABLE=3
+global constant INS_OBJ_SOLID=4
+global constant INS_OBJ_DEPTH=5
+global constant INS_OBJ_ROUTINEID=6
+
+--instance information
+global constant INS_X=7
+global constant INS_Y=8
+global constant INS_PX=9
+global constant INS_PY=10
+global constant INS_SX=11
+global constant INS_SY=12
+global constant INS_ALIVE=13
+global constant INS_CREATE=14
+global constant INS_DIR=15
+global constant INS_SPEED=16
+global constant INS_HSPEED=17
+global constant INS_VSPEED=18
+global constant INS_FRICTION=19
+global constant INS_GRAVITY_DIR=20
+global constant INS_GRAVITY_SPEED=21
+global constant INS_GRAVITY_VALUE=22
+global constant INS_IMAGE_SINGLE=23
+global constant INS_IMAGE_SPEED=24
+global constant INS_IMAGE_INDEX=25
+global constant INS_IMAGE_TIMER=26
+global constant INS_MOUSE_ENTER=27
+global constant INS_VARIABLES=28
+
+--sprite information
+global constant INS_SPR_BBOX_LEFT=29
+global constant INS_SPR_BBOX_TOP=30
+global constant INS_SPR_BBOX_RIGHT=31
+global constant INS_SPR_BBOX_BOTTOM=32
+global constant INS_SPR_OFFSETX=33
+global constant INS_SPR_OFFSETY=34
+global constant INS_SPR_IMAGES=35
+global constant INS_SPR_IMAGE_NUMBER=36
+global constant INS_SPR_WIDTH=37
+global constant INS_SPR_HEIGHT=38
+global constant INS_SPR_CHECKING=39
+global constant INS_SPR_TRANSPARENT=40
+
+--===============================list information
+global constant INS_LIST_HANDLES=41
+
+
+
+
+
+--============================new
+sequence object_list,object_handle_list
+object_list=repeat(0,length(object_info))
+object_handle_list=repeat(0,length(object_info))
+
+
+global procedure instance_number_list_create()
+   object_list=repeat(0,length(object_info))
+   object_handle_list=repeat({},length(object_info))
+   for i=1 to length(instance_info) do
+      if sequence(instance_info[i]) then
+        object_list[ instance_info[i][1] ]+=1
+        object_handle_list[instance_info[i][1]]&=i
+      end if
+   end for
+end procedure
+
+global function instance_number(integer index)
+  return object_list[index]
+end function
+--============================
+
+
+
+
+global sequence drawlist,free_drawlist
+drawlist={}
+free_drawlist={}
+
+global procedure remove_from_drawlist( integer handle )
+    drawlist[handle]=EMPTY_HANDLE
+    free_drawlist = append( free_drawlist, handle )
+end procedure
+
+global function add_to_drawlist( integer index )
+    integer handle
+    if length( free_drawlist ) then
+      handle = free_drawlist[1]
+      free_drawlist = free_drawlist[2..length(free_drawlist)]
+    else
+      drawlist =append ( drawlist, index )      
+      handle = length( drawlist )
+    end if
+    
+
+    drawlist[handle]=index
+
+    return handle
+end function
+
+
+global sequence mouse_global_releasd_list,free_mouse_global_releasd_list
+mouse_global_releasd_list={}
+free_mouse_global_releasd_list={}
+
+global procedure remove_from_mouse_global_releasd_list( integer handle )
+    mouse_global_releasd_list[handle]=EMPTY_HANDLE
+    free_mouse_global_releasd_list = append( free_mouse_global_releasd_list, handle )
+end procedure
+
+global function add_to_mouse_global_releasd_list( integer index )
+    integer handle
+
+    if length( free_mouse_global_releasd_list ) then
+      handle = free_mouse_global_releasd_list[1]
+      free_mouse_global_releasd_list = free_mouse_global_releasd_list[2..length(free_mouse_global_releasd_list)]
+    else
+      mouse_global_releasd_list =append ( mouse_global_releasd_list, index )      
+      handle = length( mouse_global_releasd_list )
+    end if
+
+    mouse_global_releasd_list[handle]=index
+    
+    return handle
+end function
+
+
+global sequence mouse_global_pressed_list,free_mouse_global_pressed_list
+mouse_global_pressed_list={}
+free_mouse_global_pressed_list={}
+
+global procedure remove_from_mouse_global_pressed_list( integer handle )
+    mouse_global_pressed_list[handle]=EMPTY_HANDLE
+    free_mouse_global_pressed_list = append( free_mouse_global_pressed_list, handle )
+end procedure
+
+global function add_to_mouse_global_pressed_list( integer index )
+    integer handle
+
+    if length( free_mouse_global_pressed_list ) then
+      handle = free_mouse_global_pressed_list[1]
+      free_mouse_global_pressed_list = free_mouse_global_pressed_list[2..length(free_mouse_global_pressed_list)]
+    else
+      mouse_global_pressed_list =append ( mouse_global_pressed_list, index )      
+      handle = length( mouse_global_pressed_list )
+    end if
+
+    mouse_global_pressed_list[handle]=index
+    
+    return handle
+end function
+
+
+global sequence animation_end_list,free_animation_end_list
+animation_end_list={}
+free_animation_end_list={}
+
+global procedure remove_from_animation_end_list( integer handle )
+    animation_end_list[handle]=EMPTY_HANDLE
+    free_animation_end_list = append( free_animation_end_list, handle )
+end procedure
+
+global function add_to_animation_end_list( integer index )
+    integer handle
+
+    if length( free_animation_end_list ) then
+      handle = free_animation_end_list[1]
+      free_animation_end_list = free_animation_end_list[2..length(free_animation_end_list)]
+    else
+      animation_end_list =append ( animation_end_list, index )      
+      handle = length( animation_end_list )
+    end if
+
+    animation_end_list[handle] =index
+    return handle
+end function
+
+
+global sequence mouse_left_releasd_list,free_mouse_left_releasd_list
+mouse_left_releasd_list={}
+free_mouse_left_releasd_list={}
+
+global procedure remove_from_mouse_left_releasd_list( integer handle )
+    mouse_left_releasd_list[handle]=EMPTY_HANDLE
+    free_mouse_left_releasd_list = append( free_mouse_left_releasd_list, handle )
+end procedure
+
+global function add_to_mouse_left_releasd_list( integer index )
+    integer handle
+
+    if length( free_mouse_left_releasd_list ) then
+      handle = free_mouse_left_releasd_list[1]
+      free_mouse_left_releasd_list = free_mouse_left_releasd_list[2..length(free_mouse_left_releasd_list)]
+    else
+      mouse_left_releasd_list =append ( mouse_left_releasd_list, index )      
+      handle = length( mouse_left_releasd_list )
+    end if
+
+    mouse_left_releasd_list[handle] =index
+    return handle
+end function
+
+
+function remove_sequence(sequence info,integer num)
+sequence temp
+temp={}
+  for i=1 to length(info) do
+     if i=num then
+     else
+       temp=append(temp,info[i])
+     end if
+  end for
+  return temp
+end function
+
+
+function remove_line(sequence string, integer line)
+sequence temp
+integer len
+  len=length(string)
+  if line=1 then
+    return string[2..len]
+  elsif line=len then
+    return string[1..len-1]
+  else
+    temp=string[1..line-1]
+    return temp&string[line+1..len]
+  end if
+end function
+
+global sequence destory_list
+destory_list={}
+
+
+procedure instance_remove( integer handle )
+    instance_info[handle]=EMPTY_HANDLE
+    free_instance_info = append( free_instance_info, handle )
+end procedure
+
+global procedure destory(integer index)
+  remove_from_drawlist(instance_info[index][INS_LIST_HANDLES][1])
+  
+  if instance_info[index][INS_LIST_HANDLES][2]!=0 then
+    remove_from_mouse_global_releasd_list(instance_info[index][INS_LIST_HANDLES][2])
+  end if
+
+  if instance_info[index][INS_LIST_HANDLES][3]!=0 then
+    remove_from_mouse_global_pressed_list(instance_info[index][INS_LIST_HANDLES][3])
+  end if
+
+  if instance_info[index][INS_LIST_HANDLES][4]!=0 then
+    remove_from_animation_end_list(instance_info[index][INS_LIST_HANDLES][4])
+  end if
+
+  if instance_info[index][INS_LIST_HANDLES][5]!=0 then
+    remove_from_mouse_left_releasd_list(instance_info[index][INS_LIST_HANDLES][5])
+  end if
+
+
+  
+  instance_remove(index)
+end procedure
+
+global procedure instance_destory(integer index)
+
+  if object_info[ instance_info[index][1] ][OBJ_EVENTS][EVENT_DESTORY][EVENT_ON]=1 then
+    call_proc(object_info[index][OBJ_ROUTINE_ID], {EVENT_DESTORY})
+  end if
+
+  destory_list&=index
+end procedure
+
+global procedure instance_destroy_all_of_object_type(integer index )
+  for i=1 to length(object_handle_list[index]) do
+     instance_destory(object_handle_list[index][i])
+  end for
+  object_handle_list[index]={}
+end procedure
+
+
+global function variable_has_value_for_all_objects(integer obj_index,integer var_index,integer v)
+  for i=1 to length(object_handle_list[obj_index]) do
+    if instance_info[object_handle_list[obj_index][i]][INS_VARIABLES][var_index][1]!=v then
+      return 0
+    end if
+  end for
+
+  return 1
+end function
+
+
+
+global function instance_create(integer index,integer x,integer y)
+integer handle,temp_self
+sequence events_list,instance_entry
+integer sprite_index,image_width,image_height,image_number,checking,
+bb_left,bb_right,bb_top,bb_bottom,offsetx,offsety,transparent
+sequence images
+
+
+
+  if length( free_instance_info ) then
+    handle = free_instance_info[1]
+    free_instance_info = free_instance_info[2..length(free_instance_info)]
+  else
+    instance_info =append ( instance_info, {} )      
+    handle = length( instance_info )
+  end if
+
+  object_list[ index ]+=1
+
+
+
+  sprite_index=object_info[index][OBJ_SPRITE]
+
+  if sprite_index>0 then
+    image_number=sprite_info[sprite_index][SPR_IMAGE_NUM]
+    images=sprite_info[sprite_index][SPR_IMAGES]
+    image_width=sprite_info[sprite_index][SPR_WIDTH]
+    image_height=sprite_info[sprite_index][SPR_HEIGHT]
+    bb_left=sprite_info[sprite_index][SPR_BBOX_LEFT]
+    bb_right=sprite_info[sprite_index][SPR_BBOX_RIGHT]
+    bb_top=sprite_info[sprite_index][SPR_BBOX_TOP]
+    bb_bottom=sprite_info[sprite_index][SPR_BBOX_BOTTOM]
+    offsetx=sprite_info[sprite_index][SPR_OFFSETX]
+    offsety=sprite_info[sprite_index][SPR_OFFSETY]
+    checking=sprite_info[sprite_index][SPR_PIXEL_PERFECT]
+    transparent=sprite_info[sprite_index][SPR_TRANSPARENT]
+  else
+    image_number=-1
+    images={}
+    image_width=0
+    image_height=0
+    bb_left=0
+    bb_right=0
+    bb_top=0
+    bb_bottom=0
+    offsetx=0
+    offsety=0
+    checking=0
+  end if
+
+  
+
+    
+instance_entry=
+{
+index,
+object_info[index][OBJ_EVENTS],
+object_info[index][OBJ_VISABLE],
+object_info[index][OBJ_SOLID],
+object_info[index][OBJ_DEPTH],
+object_info[index][OBJ_ROUTINE_ID],
+x,
+y,
+x,--px
+y,--py
+x,--sx
+y,--sy
+1,--alive
+1,--create
+0,--dir
+0,--speed
+0,--hspeed
+0,--vspeed
+0,--friction
+0,--g d
+0,--g s
+0,--g v
+-1,--image single
+0.1,--image speed
+0,--image index
+0,--image timer
+0,-- mouse enter
+{},--variables
+bb_left,
+bb_top,
+bb_right,
+bb_bottom,
+offsetx,
+offsety,
+images,
+image_number,
+image_width,
+image_height,
+checking,
+transparent,
+{}
+}
+
+instance_info[handle]=instance_entry
+
+
+  --draw,MOUSE_GLOBAL_RELEASED,MOUSE_GLOBAL_pressed,EVENT_ANIMATION_END,mouse_left_releas
+  events_list={0,0,0,0,0}
+  ret=add_to_drawlist(handle)
+  events_list[1]=ret
+
+  
+  if object_info[index][OBJ_EVENTS][EVENT_CREATE][EVENT_ON]=1 then
+    temp_self=self
+    self=handle
+    call_proc(object_info[index][OBJ_ROUTINE_ID], {EVENT_CREATE})
+    self=temp_self
+  end if
+
+  if object_info[index][OBJ_EVENTS][EVENT_MOUSE_LEFT_RELEASED][EVENT_ON]=1 then
+    ret=add_to_mouse_left_releasd_list(handle)
+    events_list[5]=ret
+  end if
+
+  if object_info[index][OBJ_EVENTS][EVENT_MOUSE_GLOBAL_RELEASED][EVENT_ON]=1 then
+    ret=add_to_mouse_global_releasd_list(handle)
+    events_list[2]=ret
+  end if
+
+  if object_info[index][OBJ_EVENTS][EVENT_MOUSE_GLOBAL_PRESSED][EVENT_ON]=1 then
+    ret=add_to_mouse_global_pressed_list(handle)
+    events_list[3]=ret
+  end if
+
+  if object_info[index][OBJ_EVENTS][EVENT_ANIMATION_END][EVENT_ON]=1 then
+    ret=add_to_animation_end_list( handle )
+    events_list[4]=ret
+  end if
+
+  instance_info[handle][INS_LIST_HANDLES]=events_list
+
+  return handle
+end function
+
+global function instance_create_move(integer index ,integer x,integer y,integer dir,integer speed)
+   ret=instance_create(index, x, y)
+   instance_info[ret][INS_DIR]=dir
+   instance_info[ret][INS_SPEED]=speed
+   return ret
+end function

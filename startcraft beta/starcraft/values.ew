@@ -1,0 +1,185 @@
+function abs(atom number)           
+    if number < 0 then
+        number = -number
+    end if
+    return number
+end function
+
+function warp_between(integer min, integer max, atom val)
+   while(val <  min) do val += max end while
+   while(val >= max) do val -= max end while
+   return val
+end function
+
+global procedure change_sprite(integer line_number, integer index)
+integer width,height,image_number,checking,
+bb_left,bb_right,bb_top,bb_bottom,offsetx,offsety,transparent
+sequence images
+
+    image_number=sprite_info[index][SPR_IMAGE_NUM]
+    images=sprite_info[index][SPR_IMAGES]
+    width=sprite_info[index][SPR_WIDTH]
+    height=sprite_info[index][SPR_HEIGHT]
+    bb_left=sprite_info[index][SPR_BBOX_LEFT]
+    bb_right=sprite_info[index][SPR_BBOX_RIGHT]
+    bb_top=sprite_info[index][SPR_BBOX_TOP]
+    bb_bottom=sprite_info[index][SPR_BBOX_BOTTOM]
+    offsetx=sprite_info[index][SPR_OFFSETY]
+    offsety=sprite_info[index][SPR_OFFSETX]
+    checking=sprite_info[index][SPR_PIXEL_PERFECT]
+    transparent=sprite_info[index][SPR_TRANSPARENT]
+
+  if instance_info[line_number][INS_IMAGE_SINGLE]<0 then
+    if instance_info[line_number][INS_IMAGE_INDEX]>length(images) then
+      instance_info[line_number][INS_IMAGE_INDEX]=length(images)
+    end if
+  else
+    if instance_info[line_number][INS_IMAGE_SINGLE]>length(images) then
+      instance_info[line_number][INS_IMAGE_SINGLE]=length(images)
+    end if
+  end if
+
+  instance_info[line_number][INS_SPR_IMAGES]=images
+  instance_info[line_number][INS_SPR_IMAGE_NUMBER]=image_number
+
+  instance_info[line_number][INS_SPR_OFFSETX]=offsetx
+  instance_info[line_number][INS_SPR_OFFSETY]=offsety
+  instance_info[line_number][INS_SPR_CHECKING]=checking
+  instance_info[line_number][INS_SPR_TRANSPARENT]=transparent
+
+  instance_info[line_number][INS_SPR_WIDTH]=width
+  instance_info[line_number][INS_SPR_HEIGHT]=height
+  instance_info[line_number][INS_SPR_BBOX_LEFT]=bb_left
+  instance_info[line_number][INS_SPR_BBOX_TOP]=bb_top
+  instance_info[line_number][INS_SPR_BBOX_RIGHT]=bb_right
+  instance_info[line_number][INS_SPR_BBOX_BOTTOM]=bb_bottom
+
+end procedure
+
+global procedure set_dir(integer line_number, atom dir)
+  dir=floor(dir)
+  dir=warp_between(0,360,dir)
+  --need to do wraping on the variable dir needs to between 0 and 360
+  instance_info[line_number][INS_DIR]=dir
+end procedure
+
+global procedure set_image_single(integer line_number, integer image)
+  instance_info[line_number][INS_IMAGE_SINGLE]=image
+end procedure
+
+
+global procedure set_depth(integer line_number, integer depth)
+  instance_info[line_number][INS_OBJ_DEPTH]=depth
+end procedure
+
+global function get_image_single(integer line_number)
+  return instance_info[line_number][INS_IMAGE_SINGLE]
+end function
+
+global function get_hspeed(integer line_number)
+  return instance_info[line_number][INS_HSPEED]
+end function
+
+global procedure set_hspeed(integer line_number, atom hspeed)
+  instance_info[line_number][INS_HSPEED]=hspeed
+end procedure
+
+global procedure set_friction(integer line_number, atom friction)
+  instance_info[line_number][INS_FRICTION]=friction
+end procedure
+
+global function get_vspeed(integer line_number)
+  return instance_info[line_number][INS_VSPEED]
+end function
+
+global procedure set_vspeed(integer line_number, atom vspeed)
+  instance_info[line_number][INS_VSPEED]=vspeed
+end procedure
+
+global procedure set_speed(integer line_number, atom speed)
+  instance_info[line_number][INS_SPEED]=speed
+end procedure
+
+global procedure set_gravity(integer line_number, integer dir, atom speed)
+  instance_info[line_number][INS_GRAVITY_DIR]=dir
+  if instance_info[line_number][INS_GRAVITY_VALUE]=0 then
+    instance_info[line_number][INS_GRAVITY_VALUE]=speed
+    instance_info[line_number][INS_GRAVITY_SPEED]=speed
+  else
+    if speed<=0 then
+      instance_info[line_number][INS_GRAVITY_VALUE]=speed
+      instance_info[line_number][INS_GRAVITY_SPEED]=speed
+    end if
+  end if
+end procedure
+
+global function get_gravity_speed(integer line_number)
+  return instance_info[line_number][INS_GRAVITY_SPEED]
+end function
+
+global procedure set_gravity_speed(integer line_number, atom speed)
+  instance_info[line_number][INS_GRAVITY_SPEED]=speed
+end procedure
+
+global function get_dir(integer line_number)
+  return instance_info[line_number][INS_DIR]
+end function
+
+global procedure set_x(integer line_number, atom x)
+  --instance_info[line_number][INS_PX]=instance_info[line_number][INS_X] 
+  instance_info[line_number][INS_X]=x
+end procedure
+
+global function get_x(integer line_number)
+  return instance_info[line_number][INS_X]
+end function
+
+global function get_xoffset(integer line_number)
+  return instance_info[line_number][INS_SPR_OFFSETX]
+end function
+
+global function get_yoffset(integer line_number)
+  return instance_info[line_number][INS_SPR_OFFSETY]
+end function
+
+global procedure set_y(integer line_number, atom y)
+  --instance_info[line_number][INS_PY]=instance_info[line_number][INS_Y] 
+  instance_info[line_number][INS_Y]=y
+end procedure
+
+global procedure set_solid(integer line_number, integer solid)
+  instance_info[line_number][INS_OBJ_SOLID]=solid
+end procedure
+
+global function get_y(integer line_number)
+  return instance_info[line_number][INS_Y]
+end function
+
+global function get_width(integer line_number)
+  return instance_info[line_number][INS_SPR_WIDTH]
+end function
+
+global function get_height(integer line_number)
+  return instance_info[line_number][INS_SPR_HEIGHT]
+end function
+
+global procedure instance_destroy(integer line_number)
+  instance_info[line_number][INS_ALIVE]=0
+end procedure
+
+global function add_variable(integer line_number,object v)
+  instance_info[line_number][INS_VARIABLES]=append(instance_info[line_number][INS_VARIABLES],{v})
+  return length(instance_info[line_number][INS_VARIABLES])
+end function
+
+global procedure set_variable(integer line_number,integer index,object v)
+   instance_info[line_number][INS_VARIABLES][index][1]=v
+end procedure
+
+global function get_variable(integer line_number,integer index)
+  return instance_info[line_number][INS_VARIABLES][index][1]
+end function
+
+global function get_speed(integer line_number)
+   return instance_info[line_number][INS_SPEED]
+end function

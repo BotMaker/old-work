@@ -1,0 +1,84 @@
+rts game engine
+
+combat to do
+
+well how to make this
+might be hard
+
+would have to check for
+all the diffrent enemys
+to see if there in
+range and then find
+witch one is closeist
+out of the diffrent
+enemy useing the 
+functions
+instance_nearest
+distance_to_instance
+
+the instance_nearest
+function would be
+slow because would
+have to compute
+each time for every
+call
+
+
+missile can only attack
+the enemy with a id 
+choose by the unit
+
+the missile will track
+the target into it hits
+the target or runs out
+of fule witch it will
+hit the ground and
+exsplode
+
+commands
+
+move to position if come
+across a enemy attack
+but then stop there
+
+move to position without
+intercepting enemys
+
+attack a enemy follows
+the enemy and attacks
+into the enemy is 
+destroyed
+
+stop command stoping
+everything the unit
+is doing
+
+
+this could realy slow
+the game engine down
+because of the instance_
+nearest function each
+unit would have to use
+this to see when its
+with in range of
+a enemy so each player
+unit would be doing this
+many computeing
+
+the number of player
+units and th number of
+enemy units *times each
+game step
+
+10000 distance_to_point
+calls if
+enemy had 100 untis
+and the player had
+100 units and then the
+enemy would have to do
+10000 has well so
+20000 total
+
+may be if i check for
+enemy in range every
+two steps or more

@@ -1,0 +1,63 @@
+sequence sound_info
+integer sound_num
+sound_info={}
+sound_num=0
+
+--============================================================--
+constant SND_SOUND=1
+constant SND_SOUNDTYPE=2
+--constant SND_SOUNDBUFFER=3
+--constant SND_SOUNDNUMBER=4
+
+global procedure play_sound(integer index, integer loop)
+  if sound_info[index][SND_SOUNDTYPE]=0 then
+    ret=play_sample (sound_info[index][SND_SOUND], 255, 128, 1000, loop)
+  elsif sound_info[index][SND_SOUNDTYPE]=1 then
+    ret=play_midi(sound_info[index][SND_SOUND],loop)
+  end if
+end procedure
+
+global procedure stop_sound(integer index)
+  if sound_info[index][SND_SOUNDTYPE]=0 then
+    stop_sample (sound_info[index][SND_SOUND])
+  elsif sound_info[index][SND_SOUNDTYPE]=1 then
+    stop_midi()
+  end if
+end procedure
+
+--params[1] file name
+--params[2] buffer
+global function add_sound(sequence params)
+sequence fname
+integer sound_type
+atom mem
+  fname=params[1]
+  sound_type=0-- wav,voc
+  for i=length(fname) to 1 by -1do
+    if fname[i]='.' then
+      if equal(lower(fname[i+1..length(fname)]),"mid")=1 then
+        sound_type=1--mid
+      end if
+      exit
+    end if
+  end for
+  if sound_type=0 then
+    mem=load_sample(fname)
+  elsif sound_type=1 then
+    mem=load_midi(fname)
+  end if
+  sound_info=append(sound_info,{mem,sound_type})
+  sound_num+=1
+  return sound_num
+end function
+
+global procedure destroy_sounds()
+  for i=1 to length(sound_info) do
+    if sound_info[i][SND_SOUNDTYPE]=0 then
+      destroy_sample(sound_info[i][SND_SOUND])
+    elsif sound_info[i][SND_SOUNDTYPE]=1 then
+      destroy_midi(sound_info[i][SND_SOUND])
+    end if
+  end for
+end procedure
+--============================================================--

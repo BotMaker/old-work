@@ -1,0 +1,94 @@
+global sequence object_info
+integer object_num
+object_info={}
+object_num=0
+
+--============================================================--
+global constant OBJ_SPRITE=1
+global constant OBJ_VISABLE=2
+global constant OBJ_SOLID=3
+global constant OBJ_DEPTH=4
+global constant OBJ_PERSISTENT=5
+global constant OBJ_ROUTINE_ID=6
+global constant OBJ_EVENTS=7
+
+global constant EVENT_CREATE=1
+global constant EVENT_DESTORY=2
+
+global constant EVENT_ALARM0=3
+global constant EVENT_ALARM1=4
+global constant EVENT_ALARM2=5
+global constant EVENT_ALARM3=6
+
+global constant EVENT_KEYBOARD=7
+global constant EVENT_KEY_PRESSED=8
+global constant EVENT_KEY_RELEASED=9
+
+global constant EVENT_MOUSE_LEFT=10
+global constant EVENT_MOUSE_RIGHT=11
+global constant EVENT_MOUSE_LEFT_PRESSED=12
+global constant EVENT_MOUSE_RIGHT_PRESSED=13
+global constant EVENT_MOUSE_LEFT_RELEASED=14
+global constant EVENT_MOUSE_RIGHT_RELEASED=15
+global constant EVENT_MOUSE_ENTER=16
+global constant EVENT_MOUSE_LEAVE=17
+global constant EVENT_MOUSE_GLOBAL_PRESSED=18
+global constant EVENT_MOUSE_GLOBAL_RELEASED=19
+
+global constant EVENT_OUTSIDE=20
+global constant EVENT_BOUNDARY=21
+global constant EVENT_GAME_START=22
+global constant EVENT_GAME_END=23
+global constant EVENT_NO_MORE_LIVE=24
+global constant EVENT_NO_MORE_HEALTH=25
+global constant EVENT_ANIMATION_END=26
+global constant EVENT_PATH_END=27
+
+global constant EVENT_STEP=28
+global constant EVENT_COLLISION=29
+global constant EVENT_DRAW=30
+
+sequence temp
+temp=repeat({0,{}},30)
+temp[EVENT_KEYBOARD]={0,{}}
+temp[EVENT_KEY_PRESSED]={0,{}}
+temp[EVENT_KEY_RELEASED]={0,{}}
+temp[EVENT_COLLISION]={0,{}}
+
+constant EVENT_EMPTY_LIST=temp
+temp={}
+
+
+global constant EVENT_ON=1
+global constant EVENT_DATA=2
+
+-- info[1] sprite index
+-- info[2] visable
+-- info[3] solid
+-- info[4] depth
+-- info[5] persistent
+-- info[6] routine id
+global function object_add(sequence info)
+  object_info=append(object_info,{info[1],info[2],info[3],info[4],info[5],info[6],EVENT_EMPTY_LIST})
+  object_num+=1
+  return object_num
+end function
+
+global procedure object_event_add(integer index, integer event)
+    object_info[index][OBJ_EVENTS][event][EVENT_ON]=1
+end procedure
+
+global procedure object_event_add_keyboard(integer index, integer event,integer key)
+    object_info[index][OBJ_EVENTS][event][EVENT_ON]=1
+    object_info[index][OBJ_EVENTS][event][EVENT_DATA]=append(object_info[index][OBJ_EVENTS][event][EVENT_DATA],key)
+end procedure
+
+global procedure object_event_add_collision(integer index, integer index2)
+    object_info[index][OBJ_EVENTS][EVENT_COLLISION][EVENT_ON]=1
+    object_info[index][OBJ_EVENTS][EVENT_COLLISION][EVENT_DATA] =append( object_info[index][OBJ_EVENTS][EVENT_COLLISION][EVENT_DATA],{ index2 } )
+end procedure
+
+global procedure object_event_clear(integer index, integer event,integer eventnum)
+  --todo
+end procedure
+--===========================================================--

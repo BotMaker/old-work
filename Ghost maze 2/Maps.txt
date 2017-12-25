@@ -1,0 +1,37 @@
+map (version 1.0)
+
+"GH2MAP" string  6 bytes
+version   1 byte
+width     1 byte 
+height    1 byte
+author    7 bytes  (null terminated string)
+password  7 bytes  (null terminated string) encrypted
+nothing   1 byte
+nothing   1 byte
+map entities  (width*height) bytes
+
+each map entity is a numerical value between 0 and 255.
+
+0=none
+1=player
+2=wall
+3=brick
+4=stone
+5=sapphires
+6=dynamite
+7=exit
+8=red key
+9=blue key
+10=yellow key
+11=green key
+12=red door
+13=blue door
+14=yellow door
+15=green door
+
+of course, there are some limitations:
+
+  there must be only one player per map;
+  there must be only one exit per map;
+  map borders must be made of wall;
+  map width and height must be 20/15;

@@ -1,0 +1,2153 @@
+without warning
+without type_check
+
+include euallegro.ew
+include euPPCol.ew
+include misc.e
+
+object junk
+junk = {{},{}}
+for j = 360 to 0 by -1 do
+    junk[1] = append(junk[1], sin(j*PI/180) )
+    junk[2] = append(junk[2], cos(j*PI/180) )
+end for
+constant sin_loTRUE2up = junk[1], cos_loTRUE2up = junk[2]
+
+atom buffer
+atom the_palette
+integer ret
+integer window_width,window_height
+integer fps1,fps2
+atom timer1
+window_width=640
+window_height=480
+fps1=0
+fps2=0
+timer1=0
+integer time1,limit,wait
+time1=0
+limit=30
+wait=0
+
+function real(sequence string)
+sequence temp
+temp=value(string)
+return temp[2]
+end function
+
+integer music_on,sound_on,window_mode
+--settings on or off
+music_on=0
+sound_on=0
+window_mode=0
+
+
+procedure load_settings()
+  integer fn
+  object data
+  fn=open("settings.ini","r")
+ if fn=-1 then
+   --file not found defalut values will be used
+ else
+  data=gets(fn)
+  if sequence(data) then
+    data=real(data)
+    if data=0 or data=1 then
+      music_on=data
+    end if
+  end if
+  data=gets(fn)
+  if sequence(data) then
+    data=real(data)
+    if data=0 or data=1 then
+      sound_on=data
+    end if
+  end if
+  data=gets(fn)
+  if sequence(data) then
+    data=real(data)
+    if data=0 or data=1 then
+      window_mode=data
+    end if
+  end if
+  data=gets(fn)
+  if sequence(data) then
+    data=real(data)
+    if data>=0 or data<=1000 then
+      wait=data
+    end if
+  end if
+  close(fn)
+ end if
+  music_on=0
+end procedure
+load_settings()
+
+the_palette = allocate_palette()
+ret = allegro_init()
+ret = install_timer()
+ret = install_keyboard()
+ret = install_mouse()
+ret = reserve_voices (16, -1)
+ret = set_window_close_button(1)
+ret= install_sound (DIGI_AUTODETECT, MIDI_AUTODETECT, "")
+set_color_depth(16)
+set_volume(255, 255)
+
+set_window_title("Graves")
+
+if window_mode=0 then
+  ret = set_gfx_mode(GFX_AUTODETECT_WINDOWED, window_width, window_height, 0,0)
+else
+  ret = set_gfx_mode(GFX_AUTODETECT_FULLSCREEN, window_width, window_height, 0,0)
+end if
+
+function rgb( integer r, integer g, integer b )
+    return makecol(r,g,b)
+end function
+
+constant TILE_GROUND0=1
+constant TILE_GROUND1=2
+constant TILE_GROUND2=3
+constant TILE_GROUND3=4
+constant TILE_GROUND4=5 -- hole
+constant TILE_GROUND5=6
+constant TILE_GROUND6=7
+constant TILE_GROUND7=8 -- drit1
+constant TILE_GROUND8=9 -- drit2
+
+constant TILE_GRAVE0=10
+constant TILE_GRAVE1=11
+constant TILE_GRAVE2=12
+constant TILE_GRAVE3=13
+
+constant TILE_WALL0=14
+constant TILE_WALL1=15
+constant TILE_WALL2=16
+constant TILE_WALL3=17
+constant TILE_WALL4=18
+constant TILE_WALL5=19
+
+constant TILE_GATE0=20
+constant TILE_GATE1=21
+constant TILE_GATE2=22
+constant TILE_GATE3=23
+
+constant TILE_TREE0=24
+constant TILE_TREE1=25
+constant TILE_TREE2=26
+constant TILE_TREE3=27
+constant TILE_TREE4=28
+constant TILE_TREE5=29
+constant TILE_TREE6=30
+constant TILE_TREE7=31
+constant TILE_TREE8=32
+constant TILE_TREE9=33
+constant TILE_TREE10=34
+
+constant TILE_MUD0=35
+constant TILE_MUD1=36
+constant TILE_MUD2=37
+constant TILE_MUD3=38
+constant TILE_MUD4=39
+constant TILE_MUD5=40
+
+sequence spade_images
+spade_images={}
+spade_images&=load_bitmap("images\\spade_empty_down.bmp", the_palette)
+spade_images&=load_bitmap("images\\spade_empty_up.bmp", the_palette)
+spade_images&=load_bitmap("images\\spade_empty_right.bmp", the_palette)
+spade_images&=load_bitmap("images\\spade_empty_left.bmp", the_palette)
+spade_images&=load_bitmap("images\\spade_full_down.bmp", the_palette)
+spade_images&=load_bitmap("images\\spade_full_up.bmp", the_palette)
+spade_images&=load_bitmap("images\\spade_full_right.bmp", the_palette)
+spade_images&=load_bitmap("images\\spade_full_left.bmp", the_palette)
+spade_images&=load_bitmap("images\\spade_green_full_down.bmp", the_palette)
+spade_images&=load_bitmap("images\\spade_green_full_up.bmp", the_palette)
+spade_images&=load_bitmap("images\\spade_green_full_right.bmp", the_palette)
+spade_images&=load_bitmap("images\\spade_green_full_left.bmp", the_palette)
+
+sequence tiles
+tiles={}
+tiles&= load_bitmap("images\\tile_ground0.bmp", the_palette)
+tiles&= load_bitmap("images\\tile_ground1.bmp", the_palette)
+tiles&= load_bitmap("images\\tile_ground2.bmp", the_palette)
+tiles&= load_bitmap("images\\tile_ground3.bmp", the_palette)
+tiles&= load_bitmap("images\\tile_ground4.bmp", the_palette)
+tiles&= load_bitmap("images\\tile_ground5.bmp", the_palette)
+tiles&= load_bitmap("images\\tile_ground6.bmp", the_palette)
+tiles&= load_bitmap("images\\tile_ground7.bmp", the_palette)
+tiles&= load_bitmap("images\\tile_ground8.bmp", the_palette)
+
+tiles&= load_bitmap("images\\tile_grave0.bmp", the_palette)
+tiles&= load_bitmap("images\\tile_grave1.bmp", the_palette)
+tiles&= load_bitmap("images\\tile_grave2.bmp", the_palette)
+tiles&= load_bitmap("images\\tile_grave3.bmp", the_palette)
+
+tiles&= load_bitmap("images\\tile_wall0.bmp", the_palette)
+tiles&= load_bitmap("images\\tile_wall1.bmp", the_palette)
+tiles&= load_bitmap("images\\tile_wall2.bmp", the_palette)
+tiles&= load_bitmap("images\\tile_wall3.bmp", the_palette)
+tiles&= load_bitmap("images\\tile_wall4.bmp", the_palette)
+tiles&= load_bitmap("images\\tile_wall5.bmp", the_palette)
+
+tiles&= load_bitmap("images\\tile_gate0.bmp", the_palette)
+tiles&= load_bitmap("images\\tile_gate1.bmp", the_palette)
+tiles&= load_bitmap("images\\tile_gate2.bmp", the_palette)
+tiles&= load_bitmap("images\\tile_gate3.bmp", the_palette)
+
+atom tree_gfx
+tree_gfx=load_bitmap("images\\tree.bmp", the_palette)
+
+atom money_gfx
+money_gfx=load_bitmap("images\\money.bmp", the_palette)
+
+atom hole_gfx
+hole_gfx=load_bitmap("images\\holes.bmp", the_palette)
+
+for i=1 to 11 do
+  tiles&=create_bitmap(32,32)
+  blit(tree_gfx,tiles[length(tiles)],(32*i)-32,0,0,0,32,32)
+end for
+
+atom mud_gfx
+mud_gfx=load_bitmap("images\\mud_hill.bmp", the_palette)
+for i=1 to 6 do
+  tiles&=create_bitmap(32,32)
+  blit(mud_gfx,tiles[length(tiles)],(32*i)-32,0,0,0,32,32)
+end for
+
+sequence light_images
+light_images={}
+light_images&=load_bitmap("images\\light1.bmp", the_palette)
+light_images&=load_bitmap("images\\light2.bmp", the_palette)
+light_images&=load_bitmap("images\\light3.bmp", the_palette)
+light_images&=load_bitmap("images\\light4.bmp", the_palette)
+
+sequence player_images
+player_images={}
+player_images&= load_bitmap("images\\player_stand_up.bmp", the_palette)
+player_images&= load_bitmap("images\\player_stand_down.bmp", the_palette)
+player_images&= load_bitmap("images\\player_stand_left.bmp", the_palette)
+player_images&= load_bitmap("images\\player_stand_right.bmp", the_palette)
+
+player_images&= load_bitmap("images\\player_walk_up1.bmp", the_palette)
+player_images&= load_bitmap("images\\player_walk_up2.bmp", the_palette)
+player_images&= load_bitmap("images\\player_walk_down1.bmp", the_palette)
+player_images&= load_bitmap("images\\player_walk_down2.bmp", the_palette)
+player_images&= load_bitmap("images\\player_walk_left1.bmp", the_palette)
+player_images&= load_bitmap("images\\player_walk_left2.bmp", the_palette)
+player_images&= load_bitmap("images\\player_walk_right1.bmp", the_palette)
+player_images&= load_bitmap("images\\player_walk_right2.bmp", the_palette)
+
+player_images&= load_bitmap("images\\green_effect.bmp", the_palette)
+
+sequence object_images
+object_images={}
+object_images&=load_bitmap("images\\object_cup.bmp", the_palette)
+object_images&=load_bitmap("images\\object_chest.bmp", the_palette)
+object_images&=load_bitmap("images\\object_boot1.bmp", the_palette)
+object_images&=load_bitmap("images\\object_boot2.bmp", the_palette)
+object_images&=load_bitmap("images\\object_poison1.bmp", the_palette)
+object_images&=load_bitmap("images\\object_poison2.bmp", the_palette)
+
+sequence screen_images
+screen_images={}
+screen_images&=load_bitmap("images\\graves.bmp", the_palette)
+screen_images&=load_bitmap("images\\help.bmp", the_palette)
+screen_images&=load_bitmap("images\\about.bmp", the_palette)
+
+sequence star_images
+star_images={}
+star_images&=load_bitmap("images\\star1.bmp", the_palette)
+star_images&=load_bitmap("images\\star2.bmp", the_palette)
+star_images&=load_bitmap("images\\star3.bmp", the_palette)
+
+sequence liveing_dead_images
+liveing_dead_images={}
+liveing_dead_images&=load_bitmap("images\\liveing_dead1.bmp", the_palette)
+liveing_dead_images&=load_bitmap("images\\liveing_dead2.bmp", the_palette)
+liveing_dead_images&=load_bitmap("images\\liveing_dead3.bmp", the_palette)
+
+atom graves_green_font
+graves_green_font=load_bitmap("fonts\\graves_green_font.bmp", the_palette)
+sequence font_images
+sequence font_position
+font_position={}
+font_images={}
+
+function left_bbox(atom tempbuffer,atom color)
+integer width,height
+sequence temp
+integer small
+width=bitmap_w(tempbuffer)-1
+height=bitmap_h(tempbuffer)-1
+temp={}
+small=width+1
+
+  for i=0 to height do
+     for j=0 to width do
+       if getpixel(tempbuffer,j,i)!=color then
+         temp=append(temp,j)
+         exit
+       end if 
+     end for
+  end for
+  if length(temp)>0 then
+   for i=1 to length(temp) do
+     if temp[i]<small then
+       small=temp[i]
+     end if
+   end for
+   return small
+  else
+   return 0
+  end if
+end function
+
+function right_bbox(atom tempbuffer,atom color)
+integer width,height
+sequence temp
+integer small
+width=bitmap_w(tempbuffer)-1
+height=bitmap_h(tempbuffer)-1
+temp={}
+small=0
+  for i=0 to height do
+     for j=width to 0 by -1 do
+       if getpixel(tempbuffer,j,i)!=color then
+         temp=append(temp,j)
+         exit
+       end if 
+     end for
+  end for
+  if length(temp)>0 then
+   for i=1 to length(temp) do
+     if temp[i]>small then
+       small=temp[i]
+     end if
+   end for
+   return small
+  else
+   return 0
+  end if
+end function
+
+for i=1 to 95 do
+  font_images&=create_bitmap(32,32)
+  blit(graves_green_font,font_images[length(font_images)],(32*i)-32,0,0,0,32,32)
+  font_position=append(font_position,{left_bbox(font_images[length(font_images)],rgb(255,0,255)), right_bbox(font_images[length(font_images)],rgb(255,0,255)) })
+end for
+font_position[1][2]=16
+
+procedure font_draw_text(integer x,integer y,object text)
+  integer char
+  if sequence(text) then
+    for i=1 to length(text) do
+      char=text[i]-31
+      draw_sprite(buffer, font_images[char], x-font_position[char][1], y)
+      x+=(font_position[char][2]+1)-font_position[char][1]
+    end for
+  else
+    text=sprint(text)
+  end if
+end procedure
+
+set_palette(the_palette)
+buffer=create_bitmap(window_width, window_height)
+
+procedure delay(integer v)
+atom time1
+  time1=0
+  if v<0 then return end if
+  while time1<v do
+     time1+=0.0001
+  end while
+end procedure
+
+integer game_end
+game_end=0
+function game_exit()
+  game_end=1
+  return 1
+end function 
+set_window_close_hook(routine_id("game_exit"))
+
+constant LEFT=1
+constant RIGHT=2
+constant UP=3
+constant DOWN=4
+constant TRUE=1
+constant FALSE=0
+
+integer player_x,player_y,player_dir,player_speed,player_frame,player_has_fullspade
+integer player_above_hole,player_dead
+atom player_image_timer
+
+player_x=32
+player_y=64
+player_speed=4
+player_dir=UP
+player_frame=0
+player_image_timer=0
+player_has_fullspade=0
+player_above_hole=0
+player_dead=0
+
+integer player_power1,player_power2
+player_power1=0
+player_power2=0
+
+
+sequence object_info,objectfree_info
+object_info={}
+objectfree_info={}
+
+constant OBJECT_TYPE_CUP=1
+constant OBJECT_TYPE_CHEST=2
+constant OBJECT_TYPE_BOST1=3
+constant OBJECT_TYPE_BOST2=4
+constant OBJECT_TYPE_POISON1=5
+constant OBJECT_TYPE_POISON2=6
+
+integer object_timer
+object_timer=0
+
+
+
+
+atom graves_sfx
+graves_sfx=load_sample("sounds\\graves.wav")
+--ret=play_sample (graves_sfx, 80, 128, 1000, 1)
+
+atom hu1_sfx,hu3_sfx,hu4_sfx,hu5_sfx
+hu1_sfx=load_sample("sounds\\hu1.wav")
+
+hu3_sfx=load_sample("sounds\\hu3.wav")
+hu4_sfx=load_sample("sounds\\hu4.wav")
+hu5_sfx=load_sample("sounds\\hu5.wav")
+
+function choose_random(sequence info)
+  integer num
+  num=rand(length(info))
+  return info[num]
+end function
+
+procedure play_zombie_sound()
+  if sound_on then
+    ret=play_sample (choose_random({hu1_sfx,hu3_sfx,hu4_sfx,hu5_sfx}), 255, 128, 1000, 0)
+  end if
+end procedure
+
+sequence tile_map
+tile_map={}
+
+sequence tile_overlayer
+tile_overlayer={}-- tile,colum,row
+
+constant WALKABLE=1
+constant UNWALKABLE=0
+sequence walkable_array
+walkable_array={}
+
+sequence light_info
+light_info={}
+
+procedure enter_light_effect(integer r,integer c)
+  light_info=append(light_info,{(c*32)-32,(r*32)-32,UP,0,1})
+end procedure
+
+procedure draw_light_effect()
+  integer x,y,frame,dir
+  atom image_timer
+
+  set_trans_blender(128, 128, 128, 128)
+
+  for i=1 to length(light_info) do
+     x=light_info[i][1]
+     y=light_info[i][2]
+     dir=light_info[i][3]
+     image_timer=light_info[i][4]
+     frame=light_info[i][5]
+     
+     image_timer+=0.3
+     if image_timer>1 then
+       if dir=UP then
+         frame+=1
+         if frame>4 then
+           frame=4
+           dir=DOWN
+           light_info[i][3]=dir
+         end if
+         light_info[i][5]=frame
+       else
+         frame-=1
+         if frame<1 then
+           frame=1
+           dir=UP
+           light_info[i][3]=dir
+         end if
+         light_info[i][5]=frame
+       end if
+       image_timer=0
+     end if
+     light_info[i][4]=image_timer
+     
+     draw_trans_sprite(buffer, light_images[frame] ,x, y-10 )
+     --draw_sprite(buffer, light_images[frame], x, y-10)
+  end for
+end procedure
+
+procedure enter_overlayer_tile(integer tile, integer r,integer c)
+  tile_overlayer=append(tile_overlayer,{tile,(c*32)-32,(r*32)-32})
+end procedure
+
+procedure enter_tile(integer tile,integer r,integer c,integer wb)
+  tile_map[r][c]=tile
+  walkable_array[r][c]=wb
+end procedure
+
+procedure draw_tile_overlayer()
+  for i=1 to length(tile_overlayer) do
+    draw_sprite(buffer, tiles[ tile_overlayer[i][1] ], tile_overlayer[i][2], tile_overlayer[i][3])
+  end for
+end procedure
+
+procedure create_light_tile()
+  integer r,c,num,count
+  
+  num=1+rand(6)
+  count=0
+
+  while num>count do
+    r=rand(15)
+    c=rand(20)
+    if r>=3 and r<=13 and c>=2 and c<=19 and tile_map[r][c]>=1 and tile_map[r][c]<=4 then
+      enter_tile(TILE_GROUND6, r, c ,WALKABLE)
+      enter_light_effect(r,c)
+      count+=1
+    end if
+  end while
+end procedure
+
+integer level,score
+
+level=0
+score=0
+
+integer attacking,attack_timer
+attacking=0
+attack_timer=0
+
+sequence liveing_dead1_info,liveing_dead2_info,liveing_dead3_info
+liveing_dead1_info={}
+liveing_dead2_info={}
+liveing_dead3_info={}
+
+sequence opengrave_info,opengrave_freeinfo
+opengrave_info={}
+opengrave_freeinfo={}
+
+integer opengrave_num
+opengrave_num=0
+
+constant EMPTY_HANDLE=-1
+
+procedure remove_from_opengravelist( integer handle )
+    opengrave_info[handle]=EMPTY_HANDLE
+    opengrave_freeinfo = append( opengrave_freeinfo, handle )
+    opengrave_num-=1
+end procedure
+
+procedure remove_opengrave(integer x, integer y)
+  
+  for i=1 to length(opengrave_info) do
+    if sequence(opengrave_info[i]) then
+      if opengrave_info[i][1]=(x*32) and opengrave_info[i][2]=(y*32) then 
+        remove_from_opengravelist(i)
+        score+=150
+        exit
+      end if
+    end if    
+  end for
+end procedure
+
+
+function add_to_opengravelist( sequence params)
+    integer handle
+    opengrave_num+=1
+    if length( opengrave_freeinfo ) then
+      handle = opengrave_freeinfo[1]
+      opengrave_info[handle]=params
+      opengrave_freeinfo = opengrave_freeinfo[2..length(opengrave_freeinfo)]
+    else
+      opengrave_info =append(opengrave_info,params)    
+      handle = length( opengrave_info )
+    end if
+    
+    return handle
+end function
+
+procedure create_ground_hole_tile()
+  integer r,c,num,count,ret
+  
+  num=1+(level+1)
+  count=0
+
+  while num>count do
+    r=rand(15)
+    c=rand(20)
+    if r>=3 and r<=13 and c>=2 and c<=19 and tile_map[r][c]>=1 and tile_map[r][c]<=4 then
+      enter_tile(TILE_GROUND4, r, c ,WALKABLE)
+      count+=1
+      ret=add_to_opengravelist({ r*32,c*32,600+rand(100)-(25*level)})
+    end if
+  end while
+end procedure
+
+procedure create_tree_tile()
+  integer r,c,num,count
+  
+  num=rand(3)
+  count=0
+
+  while num>count do
+    r=rand(15)
+    c=rand(20)
+    if r>=4 and r<=13 and c>=2 and c<=19 and tile_map[r][c]>=1 and tile_map[r][c]<=4 then
+      if tile_map[r+1][c]>=1 and tile_map[r+1][c]<=4 and tile_map[r-1][c]!=TILE_GROUND5 then
+        enter_overlayer_tile(TILE_TREE0, r-1, c-1)
+        enter_overlayer_tile(TILE_TREE1, r-1, c)
+        enter_overlayer_tile(TILE_TREE2, r-1, c+1)
+        enter_overlayer_tile(TILE_TREE3, r, c-1)
+        enter_overlayer_tile(TILE_TREE4, r, c)
+        enter_overlayer_tile(TILE_TREE5, r, c+1)
+
+        enter_overlayer_tile(TILE_TREE7, r+1, c-1)
+        enter_overlayer_tile(TILE_TREE8, r+1, c)
+        enter_overlayer_tile(TILE_TREE9, r+1, c+1)
+
+        enter_tile(TILE_TREE6, r, c ,UNWALKABLE)
+        enter_tile(TILE_TREE10, r+1, c ,UNWALKABLE)
+
+        count+=1
+      end if
+    end if
+  end while
+end procedure
+
+procedure create_grave_tile()
+  integer r,c,num,count,rr,cc
+  
+  num=rand(3)
+  count=0
+
+  while num>count do
+    r=rand(15)
+    c=rand(20)
+    if r>=3 and r<=13 and c>=2 and c<=19 and tile_map[r][c]>=1 and tile_map[r][c]<=4 then
+      rr=r-1
+      cc=c-1
+      if rr>=3 and rr<=14 and cc>=2 and cc<=19 and tile_map[rr][cc]>=1 and tile_map[rr][cc]<=4 then
+        enter_tile(choose_random({TILE_GRAVE0,TILE_GRAVE1,TILE_GRAVE2,TILE_GRAVE3}), rr, cc ,WALKABLE)
+      end if
+      rr=r-1
+      cc=c
+      if rr>=3 and rr<=14 and cc>=2 and cc<=19 and tile_map[rr][cc]>=1 and tile_map[rr][cc]<=4 then
+        enter_tile(choose_random({TILE_GRAVE0,TILE_GRAVE1,TILE_GRAVE2,TILE_GRAVE3}), rr, cc ,WALKABLE)
+      end if
+      rr=r-1
+      cc=c+1
+      if rr>=3 and rr<=14 and cc>=2 and cc<=19 and tile_map[rr][cc]>=1 and tile_map[rr][cc]<=4 then
+        enter_tile(choose_random({TILE_GRAVE0,TILE_GRAVE1,TILE_GRAVE2,TILE_GRAVE3}), rr, cc ,WALKABLE)
+      end if
+      rr=r
+      cc=c-1
+      if rr>=3 and rr<=14 and cc>=2 and cc<=19 and tile_map[rr][cc]>=1 and tile_map[rr][cc]<=4 then
+        enter_tile(choose_random({TILE_GRAVE0,TILE_GRAVE1,TILE_GRAVE2,TILE_GRAVE3}), rr, cc ,WALKABLE)
+      end if
+      rr=r
+      cc=c
+      if rr>=3 and rr<=14 and cc>=2 and cc<=19 and tile_map[rr][cc]>=1 and tile_map[rr][cc]<=4 then
+        enter_tile(choose_random({TILE_GRAVE0,TILE_GRAVE1,TILE_GRAVE2,TILE_GRAVE3}), rr, cc ,WALKABLE)
+      end if
+      rr=r
+      cc=c+1
+      if rr>=3 and rr<=14 and cc>=2 and cc<=19 and tile_map[rr][cc]>=1 and tile_map[rr][cc]<=4 then
+        enter_tile(choose_random({TILE_GRAVE0,TILE_GRAVE1,TILE_GRAVE2,TILE_GRAVE3}), rr, cc ,WALKABLE)
+      end if
+      rr=r+1
+      cc=c-1
+      if rr>=3 and rr<=14 and cc>=2 and cc<=19 and tile_map[rr][cc]>=1 and tile_map[rr][cc]<=4 then
+        enter_tile(choose_random({TILE_GRAVE0,TILE_GRAVE1,TILE_GRAVE2,TILE_GRAVE3}), rr, cc ,WALKABLE)
+      end if
+      rr=r+1
+      cc=c
+      if rr>=3 and rr<=14 and cc>=2 and cc<=19 and tile_map[rr][cc]>=1 and tile_map[rr][cc]<=4 then
+        enter_tile(choose_random({TILE_GRAVE0,TILE_GRAVE1,TILE_GRAVE2,TILE_GRAVE3}), rr, cc ,WALKABLE)
+      end if
+      rr=r+1
+      cc=c+1
+      if rr>=3 and rr<=14 and cc>=2 and cc<=19 and tile_map[rr][cc]>=1 and tile_map[rr][cc]<=4 then
+        enter_tile(choose_random({TILE_GRAVE0,TILE_GRAVE1,TILE_GRAVE2,TILE_GRAVE3}), rr, cc ,WALKABLE)
+      end if
+      
+      count+=1
+    end if
+  end while
+end procedure
+
+procedure new_map()
+
+object_info={}
+objectfree_info={}
+object_timer=(300+rand(100)-(25*level))
+attack_timer=0
+player_has_fullspade=0
+player_power1=0
+player_power2=0
+player_dead=0
+attacking=0
+liveing_dead1_info={}
+liveing_dead2_info={}
+liveing_dead3_info={}
+opengrave_num=0
+opengrave_info={}
+opengrave_freeinfo={}
+tile_map={}
+walkable_array={}
+tile_overlayer={}
+light_info={}
+
+for i=1 to 15 do
+  tile_map=append(tile_map,repeat(1,20) )
+  walkable_array=append(walkable_array,repeat(WALKABLE,20) )
+end for
+
+for i=1 to 15 do
+  for j=1 to 20 do
+    enter_tile(choose_random({TILE_GROUND0,TILE_GROUND1,TILE_GROUND2,TILE_GROUND3}),i,j,WALKABLE)
+  end for
+end for
+
+for i=1 to 20 do
+  enter_tile(TILE_WALL0,1,i,UNWALKABLE)
+  enter_tile(TILE_WALL1,2,i,UNWALKABLE)
+
+  enter_overlayer_tile(TILE_WALL0, 15,i)--wall
+  enter_overlayer_tile(TILE_WALL4, 14,i)--bars
+end for
+
+enter_tile(TILE_GATE0,1,9,UNWALKABLE)
+enter_tile(TILE_GATE2,2,9,UNWALKABLE)
+enter_tile(TILE_GATE1,1,10,UNWALKABLE)
+enter_tile(TILE_GATE3,2,10,UNWALKABLE)
+
+for i=1 to 15 do
+  enter_tile(TILE_WALL0,i,1,UNWALKABLE)
+  enter_tile(TILE_WALL0,i,20,UNWALKABLE)
+end for
+
+  enter_tile(TILE_MUD0,3,7,WALKABLE)
+  enter_tile(TILE_MUD1,3,8,WALKABLE)
+  enter_tile(TILE_MUD2,3,9,WALKABLE)
+  enter_tile(TILE_MUD3,4,7,WALKABLE)
+  enter_tile(TILE_MUD4,4,8,WALKABLE)
+  enter_tile(TILE_MUD5,4,9,WALKABLE)
+
+end procedure
+
+procedure set_player_start_pos()
+  sequence object_list
+  object_list={}
+  
+  for i=1 to 15 do
+    for j=1 to 20 do
+       if tile_map[i][j]=TILE_GROUND5 then
+         object_list=append(object_list,{i,j})
+       end if
+    end for
+  end for
+
+  object_list=choose_random(object_list)
+  player_y=((object_list[1]*32)-32)-30
+  player_x=(object_list[2]*32)-32
+
+  for i=1 to 15 do
+    for j=1 to 20 do
+       if tile_map[i][j]=TILE_GROUND7 then
+         tile_map[i][j]=TILE_GROUND1
+       end if
+    end for
+  end for
+end procedure
+
+procedure create_build(integer sx,integer sy,integer mw,integer mh)
+  integer width,height,startx,starty,door
+  
+  startx=sx
+  starty=sy
+
+  width=2+rand(mw)
+  height=3+rand(mh)
+
+  door=rand(width-2)
+
+  for i=0 to width-1 do
+    enter_tile(TILE_GROUND7, starty-1,startx+i,WALKABLE)
+    enter_overlayer_tile(TILE_WALL0, starty-1,startx+i)--back wall
+    enter_overlayer_tile(TILE_WALL4, starty-2,startx+i)--bars
+
+    enter_tile(TILE_WALL1,starty,startx+i,UNWALKABLE)
+    if i!=door then
+      enter_overlayer_tile(TILE_WALL0, starty+(height-1)-1,startx+i)--inside wall
+      enter_overlayer_tile(TILE_WALL4, starty+(height-1)-1,startx+i)--bars
+    end if
+    enter_tile(choose_random({TILE_WALL1,TILE_WALL3}),starty+(height-1),startx+i,UNWALKABLE)
+  end for
+
+  for i=0 to height-2 do
+    enter_tile(TILE_WALL0,starty+i,startx,UNWALKABLE)
+    enter_tile(TILE_WALL0,starty+i,startx+(width-1),UNWALKABLE)
+  end for
+
+  for i=1 to height-2 do
+    for j=1 to width-2 do
+       enter_tile(TILE_GROUND5,starty+i,startx+j,WALKABLE)
+    end for
+  end for
+
+  enter_overlayer_tile(TILE_WALL5, starty+(height-1)-2,startx+door)--arc1
+  enter_overlayer_tile(TILE_WALL2, starty+(height-1)-1,startx+door)--arc2
+  enter_tile(TILE_GROUND5,starty+(height-1),startx+door,WALKABLE)
+end procedure
+
+  
+procedure draw_tiles()
+  integer x,y
+  y=0
+  for i=1 to 15 do
+    x=0
+    for j=1 to 20 do
+      draw_sprite(buffer, tiles[ tile_map[i][j] ], x, y)
+      x+=32
+    end for
+    y+=32
+  end for
+end procedure
+
+procedure draw_walkable()
+  integer x,y
+  y=0
+  for i=1 to 15 do
+    x=0
+    for j=1 to 20 do
+      textout_ex(buffer,font, sprint(walkable_array[i][j]) ,x+8, y+8, rgb(255,255,255),-1 )
+      x+=32
+    end for
+    y+=32
+  end for
+end procedure
+
+
+function check_collision_ground(atom x, atom y)--check to see if a collision with the map
+  sequence object_list
+  object_list={}
+
+  for i=1 to 15 do
+    for j=1 to 20 do
+      if walkable_array[i][j]=UNWALKABLE or tile_map[i][j]=TILE_GROUND7 or tile_map[i][j]=TILE_GROUND8 then
+        object_list=append(object_list,{(j*32)-32,(i*32)-32})
+      end if
+    end for
+  end for
+  
+  for i=1 to length(object_list) do
+    if check_bb_collision_general(floor(x+7), floor(y+28), 25, 25, object_list[i][1], object_list[i][2], 32, 32) then
+      return 1
+    end if
+  end for
+
+  return 0
+end function
+
+function check_collision_ground2(atom x, atom y)--check to see if a collision with the map
+  sequence object_list
+  object_list={}
+
+  for i=1 to 15 do
+    for j=1 to 20 do
+      if walkable_array[i][j]=UNWALKABLE then
+        object_list=append(object_list,{(j*32)-32,(i*32)-32})
+      end if
+    end for
+  end for
+  
+  for i=1 to length(object_list) do
+    if check_bb_collision_general(floor(x+7), floor(y+28), 25, 25, object_list[i][1], object_list[i][2], 32, 32) then
+      return 1
+    end if
+  end for
+
+  return 0
+end function
+
+
+function abs(integer x)
+    if x < 0 then
+        x = -x
+    end if
+    return x
+end function--abs
+
+function warp_between(integer min, integer max, atom val)
+integer num
+  
+  if val>max then
+    num=floor(val/max)
+    val-=(num*max)
+    
+    return val
+  end if
+  if val<min then
+    num=floor(val/min)
+    val+=(num*abs(min))
+    
+    return val
+  end if
+  
+  return val
+end function
+
+function get_x(integer index, integer deadtype)
+  if deadtype=1 then
+    return liveing_dead2_info[index][1]
+  elsif deadtype=2 then
+    return liveing_dead3_info[index][1]
+  end if
+end function
+
+function get_y(integer index, integer deadtype)
+  if deadtype=1 then
+    return liveing_dead2_info[index][2]
+  elsif deadtype=2 then
+    return liveing_dead3_info[index][2]
+  end if
+end function
+
+function get_dir(integer index, integer deadtype)
+  if deadtype=1 then
+    return liveing_dead2_info[index][3]
+  elsif deadtype=2 then
+    return liveing_dead3_info[index][3]
+  end if
+end function
+
+function get_speed(integer index, integer deadtype)
+  if deadtype=1 then
+    return liveing_dead2_info[index][4]
+  elsif deadtype=2 then
+    return liveing_dead3_info[index][4]
+  end if
+end function
+
+procedure set_x(integer index , atom v, integer deadtype)
+  if deadtype=1 then
+    liveing_dead2_info[index][1]=v
+  elsif deadtype=2 then
+    liveing_dead3_info[index][1]=v
+  end if
+end procedure
+
+procedure set_y(integer index , atom v, integer deadtype)
+  if deadtype=1 then
+    liveing_dead2_info[index][2]=v
+  elsif deadtype=2 then
+    liveing_dead3_info[index][2]=v
+  end if
+end procedure
+
+procedure set_dir(integer index , atom v, integer deadtype)
+  v=warp_between(0,360,v)
+  if deadtype=1 then
+    liveing_dead2_info[index][3]=v
+  elsif deadtype=2 then
+    liveing_dead3_info[index][3]=v
+  end if
+end procedure
+
+procedure set_speed(integer index , atom v, integer deadtype)
+  if deadtype=1 then
+    liveing_dead2_info[index][4]=v
+  elsif deadtype=2 then
+    liveing_dead3_info[index][4]=v
+  end if
+end procedure
+
+
+function point_direction(atom x1,atom y1 , atom x2, atom y2)
+    atom angle, x, y
+    x = x1-x2
+    y = y1-y2
+
+    if y then 
+      angle = 90-(arctan(x/y) *180/ PI)
+    else 
+      if x1>x2 then
+        angle=180
+      elsif x1<x2 then
+        angle=0
+      else
+        angle=0
+      end if
+    end if
+
+    if y > 0 then 
+      angle -= 180 
+    end if
+
+    if angle >0  then
+      angle-=360
+    end if
+
+    return floor(-angle)
+end function
+
+function point_distance(atom x1,atom y1 , atom x2, atom y2)
+    atom x, y
+    x = power(floor(x1) - floor(x2), 2)
+    y = power(floor(y1) - floor(y2), 2)
+    return floor(sqrt(x + y))
+end function
+
+
+integer ahead,maxrot,stepsize
+ahead=4
+maxrot=30
+stepsize=4
+
+procedure mp_potential_step(integer line_number,atom x_temp,atom y_temp,integer stepspeed,integer deadtype) 
+sequence try
+
+atom x,y,direction,speed,hspeed,vspeed
+
+integer trynumb
+atom goaldir,dir,dif
+
+x=get_x(line_number,deadtype)
+y=get_y(line_number,deadtype)
+direction=get_dir(line_number,deadtype)
+speed=0
+hspeed=0
+vspeed=0
+
+if x=x_temp and y=y_temp then
+  return
+end if
+
+if point_distance(x,y,x_temp,y_temp)<=stepspeed then
+
+    direction=point_direction(x,y,x_temp,y_temp)
+    set_dir(line_number,direction,deadtype)
+    set_speed(line_number,0,deadtype)
+    set_x(line_number,x_temp,deadtype)
+    set_y(line_number,y_temp,deadtype)
+    return
+
+end if
+
+try=repeat(0,180)
+trynumb=1
+goaldir=point_direction(x,y,x_temp,y_temp)
+
+for i=1 to 180 by stepsize do
+
+    dir=warp_between( 0 ,360 ,(goaldir-i+360)  )
+    dif=warp_between( 0 ,360 , (direction-dir+360)  )
+    if dif<=maxrot or dif>=360-maxrot then
+      try[trynumb]=dir
+      trynumb+=1
+    end if
+    dir = warp_between( 0 ,360 ,(goaldir+i+360)  )
+    dif = warp_between( 0 ,360 ,(direction-dir+360)  )
+    if dif <= maxrot or dif >= 360-maxrot then
+      try[trynumb] = dir
+      trynumb += 1
+    end if
+
+end for
+
+speed=stepspeed
+set_speed(line_number,speed,deadtype)
+for i=1 to trynumb do
+    direction = try[i]
+
+    set_dir(line_number,direction,deadtype)
+
+    hspeed = speed*cos_loTRUE2up[direction+1]
+    vspeed = speed*sin_loTRUE2up[direction+1]
+    
+   if deadtype=1 then
+    if check_collision_ground(x + ahead*hspeed, y + ahead*vspeed)=0 and check_collision_ground(x+hspeed,y+vspeed)=0 then
+      return 
+    end if
+   elsif deadtype=2 then
+    if check_collision_ground2(x + ahead*hspeed, y + ahead*vspeed)=0 and check_collision_ground2(x+hspeed,y+vspeed)=0 then
+      return 
+    end if
+   end if
+
+end for
+
+speed=0
+set_speed(line_number,speed,deadtype)
+
+end procedure
+
+
+procedure liveing_dead1_step()
+atom x,y,px,py,speed
+integer alarm1,dir
+  for i=1 to length(liveing_dead1_info) do
+    x=liveing_dead1_info[i][1]
+    y=liveing_dead1_info[i][2]
+    dir=liveing_dead1_info[i][3]
+    speed=liveing_dead1_info[i][4]
+    alarm1=liveing_dead1_info[i][5]
+
+    if attacking=0 then
+     if alarm1>0 then
+      alarm1-=1
+      if alarm1=0 then
+        dir=rand(360)
+        speed=0.4
+        liveing_dead1_info[i][3]=dir
+        liveing_dead1_info[i][4]=speed
+        alarm1=120
+      end if
+      liveing_dead1_info[i][5]=alarm1
+     end if
+    end if
+
+    if attacking then
+      dir=point_direction(x,y,player_x,player_y)
+      speed=2
+      liveing_dead1_info[i][3]=dir
+      liveing_dead1_info[i][4]=speed
+    end if
+
+    px=x
+    py=y
+    x += speed*cos_loTRUE2up[dir+1]
+    y += speed*sin_loTRUE2up[dir+1]
+    
+    if check_collision_ground( floor(x), floor(y) )  then
+      x=px
+      y=py
+      dir=rand(360)
+      speed=0.4
+      liveing_dead1_info[i][3]=dir
+      liveing_dead1_info[i][4]=speed
+    end if
+
+    liveing_dead1_info[i][1]=x
+    liveing_dead1_info[i][2]=y
+
+    draw_sprite(buffer, liveing_dead_images[1] , floor(x), floor(y))
+  end for
+end procedure
+
+procedure create_liveing_dead1(integer x, integer y)
+  liveing_dead1_info=append(liveing_dead1_info,{x,y,rand(360),1,10})
+  play_zombie_sound()
+end procedure
+
+
+procedure liveing_dead2_step()
+atom x,y,px,py,speed
+integer alarm1,dir
+  for i=1 to length(liveing_dead2_info) do
+    x=liveing_dead2_info[i][1]
+    y=liveing_dead2_info[i][2]
+    dir=liveing_dead2_info[i][3]
+    speed=liveing_dead2_info[i][4]
+    alarm1=liveing_dead2_info[i][5]
+
+    if attacking=0 then
+     if alarm1>0 then
+      alarm1-=1
+      if alarm1=0 then
+        dir=rand(360)
+        speed=0.2
+        liveing_dead2_info[i][3]=dir
+        liveing_dead2_info[i][4]=speed
+        alarm1=120
+      end if
+      liveing_dead2_info[i][5]=alarm1
+     end if
+    end if
+
+    if attacking then
+      mp_potential_step(i , floor(player_x) ,floor(player_y),2,1) 
+    end if
+
+    px=x
+    py=y
+    x += speed*cos_loTRUE2up[dir+1]
+    y += speed*sin_loTRUE2up[dir+1]
+    
+    if check_collision_ground( floor(x), floor(y) ) and attacking=0 then
+      x=px
+      y=py
+      dir=rand(360)
+      speed=0.2
+      liveing_dead2_info[i][3]=dir
+      liveing_dead2_info[i][4]=speed
+    end if
+
+    liveing_dead2_info[i][1]=x
+    liveing_dead2_info[i][2]=y
+
+    draw_sprite(buffer, liveing_dead_images[2] , floor(x), floor(y))
+  end for
+end procedure
+
+procedure create_liveing_dead2(integer x, integer y)
+  liveing_dead2_info=append(liveing_dead2_info,{x,y,rand(360),1,10})
+  play_zombie_sound()
+end procedure
+
+
+procedure liveing_dead3_step()
+atom x,y,px,py,speed
+integer alarm1,dir
+  for i=1 to length(liveing_dead3_info) do
+    x=liveing_dead3_info[i][1]
+    y=liveing_dead3_info[i][2]
+    dir=liveing_dead3_info[i][3]
+    speed=liveing_dead3_info[i][4]
+    alarm1=liveing_dead3_info[i][5]
+
+    if attacking=0 then
+     if alarm1>0 then
+      alarm1-=1
+      if alarm1=0 then
+        dir=rand(360)
+        speed=0.2
+        liveing_dead3_info[i][3]=dir
+        liveing_dead3_info[i][4]=speed
+        alarm1=120
+      end if
+      liveing_dead3_info[i][5]=alarm1
+     end if
+    end if
+
+    if attacking then
+      mp_potential_step(i , floor(player_x) ,floor(player_y),2,2) 
+    end if
+
+    px=x
+    py=y
+    x += speed*cos_loTRUE2up[dir+1]
+    y += speed*sin_loTRUE2up[dir+1]
+    
+    if check_collision_ground2( floor(x), floor(y) ) and attacking=0 then
+      x=px
+      y=py
+      dir=rand(360)
+      speed=0.2
+      liveing_dead3_info[i][3]=dir
+      liveing_dead3_info[i][4]=speed
+    end if
+
+    liveing_dead3_info[i][1]=x
+    liveing_dead3_info[i][2]=y
+
+    draw_sprite(buffer, liveing_dead_images[3] , floor(x), floor(y))
+  end for
+end procedure
+
+procedure create_liveing_dead3(integer x, integer y)
+  liveing_dead3_info=append(liveing_dead3_info,{x,y,rand(360),1,10})
+  play_zombie_sound()
+end procedure
+
+
+procedure enemy_controler()
+  integer ret
+
+
+  attack_timer+=1
+   attacking=1
+  if attacking=0 and attack_timer>(500+rand(200))-(25*level) then
+    attack_timer=0
+    if length(liveing_dead1_info) or length(liveing_dead2_info) or length(liveing_dead3_info) then
+      attacking=1
+    end if
+  elsif attacking=1 and attack_timer>100 then
+    attack_timer=0
+    attacking=0
+  end if
+
+  
+  for i=1 to length(opengrave_info) do
+    if sequence(opengrave_info[i]) then
+      if opengrave_info[i][3] then
+        opengrave_info[i][3]-=1
+        if opengrave_info[i][3]=0 then
+          opengrave_info[i][3]=(600+rand(100)-(25*level))
+          if level<=3 then
+            create_liveing_dead1(opengrave_info[i][2]-32,opengrave_info[i][1]-54 )
+          elsif level >=4 and level<=7 then
+            ret=choose_random({1,2})
+            if ret=1 then
+              create_liveing_dead1(opengrave_info[i][2]-32,opengrave_info[i][1]-54 )
+            else
+              create_liveing_dead2(opengrave_info[i][2]-32,opengrave_info[i][1]-54 )
+            end if
+          else
+            ret=choose_random({1,2,3})
+            if ret=1 then
+              create_liveing_dead1(opengrave_info[i][2]-32,opengrave_info[i][1]-54 )
+            elsif ret=2 then
+              create_liveing_dead2(opengrave_info[i][2]-32,opengrave_info[i][1]-54 )
+            else
+              create_liveing_dead3(opengrave_info[i][2]-32,opengrave_info[i][1]-54 )
+            end if
+          end if
+        end if
+      end if      
+    end if
+  end for
+end procedure
+
+
+procedure remove_from_object_list( integer handle )
+    object_info[handle]=EMPTY_HANDLE
+    objectfree_info = append( objectfree_info, handle )
+end procedure
+
+function add_to_object_list( sequence params )
+    integer handle
+    if length( objectfree_info ) then
+      handle = objectfree_info[1]
+      object_info[handle]=params
+      objectfree_info = objectfree_info[2..length(objectfree_info)]
+    else
+      object_info =append(object_info, params)
+      handle = length( object_info )
+    end if
+    
+    return handle
+end function
+
+procedure object_step()
+integer x,y,object_type
+  for i=1 to length(object_info) do
+    if sequence(object_info[i]) then
+      x=object_info[i][1]
+      y=object_info[i][2]
+      object_type=object_info[i][3]
+
+      draw_sprite(buffer, object_images[object_type] , x, y)
+    end if
+  end for
+end procedure
+
+function object_place(integer ox,integer oy)
+  integer x,y
+  for i=1 to length(object_info) do
+    if sequence(object_info[i]) then
+      x=object_info[i][1]
+      y=object_info[i][2]
+      if x=ox and y=oy then
+        return 1
+      end if
+    end if
+  end for
+  return 0
+end function
+
+procedure object_controler()
+integer r,c,count
+  object_timer-=1
+  if object_timer=0 then
+    object_timer=(300+rand(100)-(25*level))
+    count=50
+    while count>0 do
+    r=rand(15)
+    c=rand(20)
+    if r>=3 and r<=14 and c>=1 and c<=19 and tile_map[r][c]>=1 and tile_map[r][c]<=4 and object_place((c*32)-32,(r*32)-32)=0 then
+      ret=add_to_object_list( {(c*32)-32,(r*32)-32, choose_random({1,2,3,4,5,6}) } )
+      exit
+    end if
+    count-=1
+    end while
+  end if
+end procedure
+
+
+function check_collision_with_object(atom px,atom py)
+  integer x,y
+  for i=1 to length(object_info) do
+    if sequence(object_info[i]) then
+      x=object_info[i][1]
+      y=object_info[i][2]
+      if check_bb_collision_general(floor(x),floor(y),32,32,px+7,py+28,20,22) then
+        return i
+      end if
+    end if
+  end for
+  return 0
+end function
+
+
+function check_collision(atom x, atom y)--check to see if a collision with the map
+  sequence object_list
+  object_list={}
+
+  for i=1 to 15 do
+    for j=1 to 20 do
+      if walkable_array[i][j]=UNWALKABLE then
+        object_list=append(object_list,{(j*32)-32,(i*32)-32})
+      end if
+    end for
+  end for
+  
+  for i=1 to length(object_list) do
+    if check_bb_collision_general(floor(x+7), floor(y+30), 20, 20, object_list[i][1], object_list[i][2], 32, 32) then
+      return 1
+    end if
+  end for
+
+  return 0
+end function
+
+
+integer temp_row,temp_col
+temp_row=0
+temp_col=0
+
+function check_collision2(integer x,integer y)
+  sequence object_list
+  object_list={}
+
+  for i=1 to 15 do
+    for j=1 to 20 do
+      
+        object_list=append(object_list,{(j*32)-32,(i*32)-32,i,j})
+
+    end for
+  end for
+  
+  for i=1 to length(object_list) do
+    if check_bb_collision_general(x+7, y+30, 20, 10, object_list[i][1], object_list[i][2], 32, 32) then
+      temp_row=object_list[i][3]
+      temp_col=object_list[i][4]
+      return 1
+    end if
+  end for
+
+  return 0
+end function
+
+function check_spade_on_hole_collision(integer x,integer y)
+  sequence object_list
+  object_list={}
+
+  for i=1 to 15 do
+    for j=1 to 20 do
+      if tile_map[i][j]=TILE_GROUND4 then
+        object_list=append(object_list,{((j*32)-32)+6,((i*32)-32)+6,i,j})
+      end if
+    end for
+  end for
+  
+  for i=1 to length(object_list) do
+    if check_bb_collision_general(x+7, y+40, 10, 10, object_list[i][1], object_list[i][2], 18, 18) then
+      temp_row=object_list[i][3]
+      temp_col=object_list[i][4]
+      return 1
+    end if
+  end for
+
+  return 0
+end function
+
+function check_spade_on_mud_hill(integer x,integer y)
+  sequence object_list
+  object_list={}
+  object_list=append(object_list,{(8*32)-32,(3*32)-32,32,32,3,8})
+  object_list=append(object_list,{((7*32)-32)+10,(4*32)-32,20,32,4,7})
+  object_list=append(object_list,{(8*32)-32,(4*32)-32,32,32,4,8})
+  object_list=append(object_list,{(9*32)-32,(4*32)-32,16,32,4,9})
+
+  for i=1 to length(object_list) do
+    if check_bb_collision_general(x+7, y+40, 10, 20, object_list[i][1], object_list[i][2], object_list[i][3], object_list[i][4]) then
+      temp_row=object_list[i][5]
+      temp_col=object_list[i][6]
+      return 1
+    end if
+  end for
+
+  return 0
+end function
+
+function check_collision_liveing_dead(atom image,integer px,integer py)
+  atom x,y
+  for i=1 to length(liveing_dead1_info) do
+    x=liveing_dead1_info[i][1]
+    y=liveing_dead1_info[i][2]
+    --if check_pp_collision(image,liveing_dead_images[1],floor(x),floor(y),px,py) then
+    --  return 1
+    --end if
+    --rect(buffer,floor(x+7),floor(y+28),floor(x+7)+20,floor(y+28)+22,rgb(255,0,0))
+    --rect(buffer,floor(px+7),floor(py+28),floor(px+7)+20,floor(py+28)+22,rgb(255,0,0))
+    if check_bb_collision_general(floor(x+7),floor(y+28),20,22,px+7,py+28,20,22) then
+      return 1
+    end if
+  end for
+
+  return 0
+end function
+
+procedure player_step()
+  integer moveing
+  atom image
+  moveing=0
+
+  if player_power1>0 then
+    player_speed=8
+    player_power1-=1
+  else
+    player_speed=4
+  end if
+
+  if player_power2>0 then
+    --player_power2-=1
+  end if
+  
+  if key(KEY_LEFT) then
+    moveing=1
+    player_dir=LEFT
+    player_x-=player_speed
+    if check_collision(player_x,player_y) then
+      --player_x+=player_speed
+    end if
+  end if
+
+  if key(KEY_RIGHT) then
+    moveing=1
+    player_dir=RIGHT
+    player_x+=player_speed
+    if check_collision(player_x,player_y) then
+      --player_x-=player_speed
+    end if
+  end if
+
+  if key(KEY_UP) then
+    moveing=1
+    player_dir=UP
+    player_y-=player_speed
+    if check_collision(player_x,player_y) then
+      --player_y+=player_speed
+    end if
+  end if
+  
+  if key(KEY_DOWN) then
+    moveing=1
+    player_dir=DOWN
+    player_y+=player_speed
+    if check_collision(player_x,player_y) then
+      --player_y-=player_speed
+    end if
+    if player_y>(480-54) then
+      player_y=(480-54)
+    end if
+  end if
+
+  if key(KEY_SPACE) then
+    if player_has_fullspade=1 then
+      if check_spade_on_hole_collision(player_x,player_y) then
+        player_has_fullspade=0
+        enter_tile(choose_random({TILE_GROUND0,TILE_GROUND1,TILE_GROUND2,TILE_GROUND3}),temp_row,temp_col,WALKABLE)
+        remove_opengrave(temp_row,temp_col)
+      else
+        ret=check_collision2(player_x,player_y)
+        if tile_map[temp_row][temp_col]!=TILE_GROUND4 and not (tile_map[temp_row][temp_col]>=TILE_MUD0 and tile_map[temp_row][temp_col]<=TILE_MUD5) then
+          if tile_map[temp_row][temp_col]=TILE_GROUND7 then
+            enter_tile(TILE_GROUND8,temp_row,temp_col,WALKABLE)
+            player_has_fullspade=0
+          else
+            if tile_map[temp_row][temp_col]!=TILE_GROUND8 then
+              enter_tile(TILE_GROUND7,temp_row,temp_col,WALKABLE)
+              player_has_fullspade=0
+            end if
+          end if
+        end if
+      end if
+    else
+      if check_spade_on_mud_hill(player_x,player_y) then
+        player_has_fullspade=1
+      else
+        
+      end if
+    end if
+  end if
+
+  --if check_spade_on_mud_hill(player_x,player_y) then
+   -- player_above_hole=1
+  --else
+    --player_above_hole=0
+  --end if
+
+  if check_spade_on_hole_collision(player_x,player_y) and player_has_fullspade=1 then
+    player_above_hole=1
+  else
+    player_above_hole=0
+  end if
+
+ 
+
+  if moveing=0 then--standing still
+    player_image_timer=0
+
+    if player_dir=UP then
+      image=player_images[1]
+      draw_sprite(buffer, player_images[1] , player_x, player_y)
+      if player_has_fullspade=0 then
+        draw_sprite(buffer, spade_images[2] , player_x+22, player_y+32)
+      else
+        if player_above_hole=0 then
+          draw_sprite(buffer, spade_images[6] , player_x+22, player_y+32)
+        else
+          draw_sprite(buffer, spade_images[10] , player_x+22, player_y+32)
+        end if
+      end if
+    elsif player_dir=DOWN then
+      image=player_images[2]
+      draw_sprite(buffer, player_images[2] , player_x, player_y)
+      if player_has_fullspade=0 then
+        draw_sprite(buffer, spade_images[1] , player_x, player_y+32)
+      else
+        if player_above_hole=0 then
+          draw_sprite(buffer, spade_images[5] , player_x, player_y+32)
+        else
+          draw_sprite(buffer, spade_images[9] , player_x, player_y+32)
+        end if
+      end if
+    elsif player_dir=RIGHT then
+      image=player_images[4]
+      draw_sprite(buffer, player_images[4] , player_x, player_y)
+      if player_has_fullspade=0 then
+        draw_sprite(buffer, spade_images[3] , player_x+22, player_y+32)
+      else
+        if player_above_hole=0 then
+          draw_sprite(buffer, spade_images[7] , player_x+22, player_y+32)
+        else
+          draw_sprite(buffer, spade_images[11] , player_x+22, player_y+32)
+        end if
+      end if
+    elsif player_dir=LEFT then
+      image=player_images[3]
+      draw_sprite(buffer, player_images[3] , player_x, player_y)
+      if player_has_fullspade=0 then
+        draw_sprite(buffer, spade_images[4] , player_x, player_y+32)
+      else
+        if player_above_hole=0 then
+          draw_sprite(buffer, spade_images[8] , player_x, player_y+32)
+        else
+          draw_sprite(buffer, spade_images[12] , player_x, player_y+32)
+        end if
+      end if
+    end if
+  elsif moveing=1 then--moveing around
+    
+    player_image_timer+=0.1
+    if player_image_timer>1 then
+      player_frame+=1
+      if player_frame>1 then
+        player_frame=0
+      end if
+      player_image_timer=0
+    end if
+    
+    if player_dir=UP then
+      image=player_images[5+player_frame]
+      draw_sprite(buffer, player_images[5+player_frame] , player_x, player_y)
+      if player_has_fullspade=0 then
+        draw_sprite(buffer, spade_images[2] , player_x+22, player_y+32)
+      else
+        if player_above_hole=0 then
+          draw_sprite(buffer, spade_images[6] , player_x+22, player_y+32)
+        else
+          draw_sprite(buffer, spade_images[10] , player_x+22, player_y+32)
+        end if
+      end if
+    elsif player_dir=DOWN then
+      image=player_images[7+player_frame]
+      draw_sprite(buffer, player_images[7+player_frame] , player_x, player_y)
+      if player_has_fullspade=0 then
+        draw_sprite(buffer, spade_images[1] , player_x, player_y+32)
+      else
+        if player_above_hole=0 then
+          draw_sprite(buffer, spade_images[5] , player_x, player_y+32)
+        else
+          draw_sprite(buffer, spade_images[9] , player_x, player_y+32)
+        end if
+      end if
+    elsif player_dir=RIGHT then
+      image=player_images[11+player_frame]
+      draw_sprite(buffer, player_images[11+player_frame] , player_x, player_y)
+      if player_has_fullspade=0 then 
+        draw_sprite(buffer, spade_images[3] , player_x+22, player_y+32)
+      else
+        if player_above_hole=0 then
+          draw_sprite(buffer, spade_images[7] , player_x+22, player_y+32)
+        else
+          draw_sprite(buffer, spade_images[11] , player_x+22, player_y+32)
+        end if
+      end if
+    elsif player_dir=LEFT then
+      image=player_images[9+player_frame]
+      draw_sprite(buffer, player_images[9+player_frame] , player_x, player_y)
+      if player_has_fullspade=0 then
+        draw_sprite(buffer, spade_images[4] , player_x, player_y+32)
+      else
+        if player_above_hole=0 then
+          draw_sprite(buffer, spade_images[8] , player_x, player_y+32)
+        else
+          draw_sprite(buffer, spade_images[12] , player_x, player_y+32)
+        end if
+      end if
+    end if
+  end if
+
+
+  ret=check_collision_with_object(player_x,player_y)
+  if ret then
+    if object_info[ret][3]=OBJECT_TYPE_CUP then
+      score+=250
+    elsif object_info[ret][3]=OBJECT_TYPE_CHEST then
+      score+=500
+    elsif object_info[ret][3]=OBJECT_TYPE_BOST1 then
+      score+=50
+      player_power1=100
+    elsif object_info[ret][3]=OBJECT_TYPE_BOST2 then
+      score+=150
+      player_power1=200
+    elsif object_info[ret][3]=OBJECT_TYPE_POISON1 then
+      score+=50
+      --player_power2=100
+    elsif object_info[ret][3]=OBJECT_TYPE_POISON2 then
+      score+=150
+      --player_power2=200
+    end if
+    remove_from_object_list(ret)
+  end if
+
+  if player_power2 then
+    set_trans_blender(128, 128, 128, 128)
+    draw_trans_sprite(buffer, player_images[13] ,player_x-10, player_y )
+  end if
+
+  if check_collision_liveing_dead(image,player_x,player_y) and player_power2=0 then
+    player_dead=1
+  end if
+
+end procedure
+
+integer set_draw_overlayer
+set_draw_overlayer=1
+integer set_draw_walkable
+set_draw_walkable=0
+
+integer game_mode
+game_mode=0
+
+integer menu_index,menu_screen
+menu_index=1
+menu_screen=1
+
+sequence star
+star={}
+
+procedure background_star()
+  integer x,y,speed,img
+  set_trans_blender(128, 128, 128, 128)
+  
+  for i=1 to length(star) do
+     x=star[i][1]
+     y=star[i][2]
+     speed=star[i][3]
+     img=star[i][4]
+     y-=speed
+     if y<-30 then
+       y=window_height+20
+       x=rand(window_width-20)
+       speed=rand(4)
+     end if
+
+     draw_trans_sprite(buffer, star_images[img] ,x, y )
+
+     star[i][1]=x
+     star[i][2]=y
+     star[i][3]=speed
+  end for
+end procedure
+
+for i=1 to 30+rand(30) do
+   star=append(star,{rand(window_width-20),rand(window_height)+20,rand(3),rand(3)}) 
+end for
+
+
+
+while 1 do
+
+
+if game_end=1 then
+  exit
+end if
+
+fps1+=1
+
+if timer1<time() then
+  timer1=time()+1
+  fps2=fps1
+  fps1=0
+   if fps2>limit then
+     if (fps2-limit)>50 then
+       wait+=20
+     elsif (fps2-limit)>30 then
+       wait+=10
+     elsif (fps2-limit)>10 then
+       wait+=5
+     elsif (fps2-limit)>9 then
+       wait+=9
+     elsif (fps2-limit)>8 then
+       wait+=8
+     elsif (fps2-limit)>7 then
+       wait+=7
+     elsif (fps2-limit)>6 then
+       wait+=6
+     elsif (fps2-limit)>5 then
+       wait+=5
+     elsif (fps2-limit)>4 then
+       wait+=4
+     elsif (fps2-limit)>3 then
+       wait+=3
+     elsif (fps2-limit)>2 then
+       wait+=2
+     elsif (fps2-limit)>1 then
+       wait+=1
+     elsif (fps2-limit)>0 then
+       wait+=(fps2-limit)
+     end if
+   elsif fps2<limit then
+     if (fps2-limit)<-50 then
+       wait-=20
+     elsif (fps2-limit)<-30 then
+       wait-=10
+     elsif (fps2-limit)<-10 then
+       wait-=10
+     elsif (fps2-limit)<-9 then
+       wait-=9
+     elsif (fps2-limit)<-8 then
+       wait-=8
+     elsif (fps2-limit)<-7 then
+       wait-=7
+     elsif (fps2-limit)<-6 then
+       wait-=6
+     elsif (fps2-limit)<-5 then
+       wait-=5
+     elsif (fps2-limit)<-4 then
+       wait-=4
+     elsif (fps2-limit)<-3 then
+       wait-=3
+     elsif (fps2-limit)<-2 then
+       wait-=2
+     elsif (fps2-limit)<-1 then
+       wait-=1
+     end if
+   end if
+end if
+
+if game_mode=0 then
+
+  time1+=1
+  if time1>6 then
+    
+    if key(KEY_ESC) and menu_screen=1 then
+      time1=0
+      exit
+    end if
+    if key(KEY_UP) then
+      time1=0
+      menu_index-=1
+      if menu_index<1 then
+        menu_index=4
+      end if
+    end if
+    if key(KEY_DOWN) then
+      time1=0
+      menu_index+=1
+      if menu_index>4 then
+        menu_index=1
+      end if
+    end if
+    if key(KEY_ENTER) then
+      time1=0
+      
+      if menu_screen=1 then--main menu
+        if menu_index=1 then
+          score=0
+          level=10
+          game_mode=1
+          new_map()
+          create_build(3,6,5,3)
+          create_build(12,6+rand(2),5,3)
+          create_light_tile()
+          create_tree_tile()
+          create_grave_tile()
+          create_ground_hole_tile()
+          set_player_start_pos()
+
+        elsif menu_index=2 then
+          menu_screen=2
+          menu_index=1
+        elsif menu_index=4 then
+          exit
+        end if
+      elsif menu_screen=2 then --main options  
+        if menu_index=1 then
+          music_on=not(music_on)
+        elsif menu_index=2 then
+          sound_on=not(sound_on)
+        elsif menu_index=3 then
+          window_mode=not(window_mode)
+          if window_mode=0 then
+            ret = set_gfx_mode(GFX_AUTODETECT_WINDOWED, window_width, window_height, 0,0)
+          else
+            ret = set_gfx_mode(GFX_AUTODETECT_FULLSCREEN, window_width, window_height, 0,0)
+          end if
+        elsif menu_index=4 then
+          menu_screen=1
+          menu_index=1
+        end if
+      end if
+    end if
+    
+  end if
+
+  --clear_bitmap(buffer)
+  
+  blit(screen_images[1],buffer,0,0,0,0,window_width,window_height)
+  background_star()
+
+    if menu_index=1 then
+      font_draw_text(190,350,">")
+    elsif menu_index=2 then
+      font_draw_text(190,370,">")
+    elsif menu_index=3 then
+      font_draw_text(190,390,">")
+    elsif menu_index=4 then
+      font_draw_text(190,410,">")
+    end if
+
+
+  if menu_screen=1 then
+    font_draw_text(210,350,"NEW GAME")
+    font_draw_text(210,370,"OPTIONS")
+    font_draw_text(210,390,"CREDITS")
+    font_draw_text(210,410,"QUIT")
+  elsif menu_screen=2 then
+    if music_on=1 then
+      font_draw_text(210,350,"[x]MUSIC")
+    else
+      font_draw_text(210,350,"[ ]MUSIC")
+    end if
+    if sound_on=1 then
+      font_draw_text(210,370,"[x]SOUND")
+    else
+      font_draw_text(210,370,"[ ]SOUND")
+    end if
+    if window_mode=1 then
+      font_draw_text(210,390,"[x]FULLSCREEN")
+    else
+      font_draw_text(210,390,"[ ]FULLSCREEN")
+    end if
+    font_draw_text(210,410,"BACK")
+  end if
+
+  textout_ex(buffer,font, sprint(fps2) ,20, 20, rgb(255,255,255),-1 )
+  blit(buffer,screen,0,0,0,0,window_width,window_height)
+
+
+elsif game_mode=1 then
+
+  time1+=1
+  if time1>6 then
+    if key(KEY_ESC) then
+      time1=0
+      game_mode=0
+    end if
+    if key(KEY_R) then
+      time1=0
+      new_map()
+      create_build(3,6+rand(2),5,3)
+      create_build(12,6+rand(2),5,3)
+      create_light_tile()
+      create_tree_tile()
+      create_grave_tile()
+      create_ground_hole_tile()
+      set_player_start_pos()
+    end if
+    if key(KEY_O) then
+      time1=0
+      set_draw_overlayer=not(set_draw_overlayer)
+    end if
+    if key(KEY_W) then
+      time1=0
+      --ret=play_sample (hu1_sfx, 255, 128, 1000, 0)
+      set_draw_walkable=not(set_draw_walkable)
+    end if
+
+    if key(KEY_C) then
+      time1=0
+      player_power2=650000
+    end if
+
+    if key(KEY_A) then
+      time1=0
+      attacking=not(attacking)
+    end if
+  end if
+
+ 
+  clear_bitmap(buffer)
+ 
+  draw_tiles()
+
+  draw_light_effect()
+
+  enemy_controler()
+  object_controler()
+  object_step()
+
+  liveing_dead1_step()
+  liveing_dead2_step()
+  liveing_dead3_step()
+  
+  player_step()
+
+  if set_draw_overlayer then
+    draw_tile_overlayer()
+  end if
+
+  if set_draw_walkable then
+    draw_walkable()
+  end if
+
+  font_draw_text(100,20,sprint(opengrave_num))
+  draw_sprite(buffer, hole_gfx , 40, 0)
+
+
+  font_draw_text(200,20,sprint(score))
+  draw_sprite(buffer, money_gfx , 160, 10)
+
+  font_draw_text(420,20,"LEVEL: "&sprint(level))
+
+
+  if attacking=1 and player_dead=0 and opengrave_num!=0 then
+    font_draw_text(270,200,"Attack !")
+  end if
+
+  if player_dead then
+    font_draw_text(270,200,"Loser")
+  end if
+
+  if opengrave_num=0 then
+    font_draw_text(270,200,"Winner")
+  end if
+
+  textout_ex(buffer,font, sprint(fps2) ,20, 20, rgb(255,255,255),-1 )
+  blit(buffer,screen,0,0,0,0,window_width,window_height)
+
+  if player_dead then
+    sleep(2)
+    game_mode=0
+  end if
+
+  if opengrave_num=0 then
+    sleep(2)
+    level+=1
+    new_map()
+    create_build(3,6+rand(2),5,3)
+    create_build(12,6+rand(2),5,3)
+    create_light_tile()
+    create_tree_tile()
+    create_grave_tile()
+    create_ground_hole_tile()
+    set_player_start_pos()
+  end if
+
+end if
+
+  delay(wait)
+end while
+
+
+integer fn
+fn=open("settings.ini","w")
+  puts(fn,sprint(music_on)&"\n")
+  puts(fn,sprint(sound_on)&"\n")
+  puts(fn,sprint(window_mode)&"\n")
+  if wait<0 then
+    puts(fn,"0\n")
+  else
+    puts(fn,sprint(wait)&"\n")
+  end if
+close(fn)
+
+for i=1 to length(screen_images) do
+  destroy_bitmap(screen_images[i])
+end for
+for i=1 to length(spade_images) do
+  destroy_bitmap(spade_images[i])
+end for
+for i=1 to length(object_images) do
+  destroy_bitmap(object_images[i])
+end for
+for i=1 to length(light_images) do
+  destroy_bitmap(light_images[i])
+end for
+for i=1 to length(tiles) do
+  destroy_bitmap(tiles[i])
+end for
+for i=1 to length(player_images) do
+  destroy_bitmap(player_images[i])
+end for
+for i=1 to length(font_images) do
+  destroy_bitmap(font_images[i])
+end for
+for i=1 to length(star_images) do
+  destroy_bitmap(star_images[i])
+end for
+for i=1 to length(liveing_dead_images) do
+  destroy_bitmap(liveing_dead_images[i])
+end for
+
+destroy_sample(hu1_sfx)
+destroy_sample(hu3_sfx)
+destroy_sample(hu4_sfx)
+destroy_sample(hu5_sfx)
+destroy_sample(graves_sfx)
+destroy_palette(the_palette)
+destroy_bitmap(money_gfx)
+destroy_bitmap(mud_gfx)
+destroy_bitmap(tree_gfx)
+destroy_bitmap(hole_gfx)
+destroy_bitmap(graves_green_font)
+destroy_bitmap(buffer)
+
+allegro_exit()

@@ -1,0 +1,1154 @@
+without warning
+without type_check
+
+include euallegro.ew
+include euPPCol.ew
+include misc.e
+include wildcard.e --lower
+
+global function rgb( integer r, integer g, integer b )
+    return makecol(r,g,b)
+end function
+
+object junk
+junk = {{},{}}
+for j = 360 to 0 by -1 do
+    junk[1] = append(junk[1], sin(j*PI/180) )
+    junk[2] = append(junk[2], cos(j*PI/180) )
+end for
+global constant sin_loTRUE2up = junk[1], cos_loTRUE2up = junk[2]
+
+global atom buffer
+global atom the_palette
+global object ret
+global integer view_left,view_top
+global integer window_width,window_height,room_width,room_height
+global integer mouse_global_pressed,mouse_global_releasd
+
+global integer self,other,collision_index
+self=0
+
+global integer count_collision
+count_collision=0
+
+integer view_scroll_rate
+integer game_mode
+global integer mousex,mousey,view_mousex,view_mousey
+integer fps1,fps2
+atom timer1
+window_width=640
+window_height=480
+fps1=0
+fps2=0
+timer1=0
+integer time1,limit,wait
+time1=0
+limit=40
+wait=0
+game_mode=0
+mousex=0
+mousey=0
+room_width=0
+room_height=0
+view_left=0
+view_top=0
+view_scroll_rate=16
+view_mousex=0
+view_mousey=0
+
+global constant mb_left=1,mb_right=2
+
+global integer mouse_left_pressed,mouse_right_pressed,mouse_button
+
+mouse_button=0
+
+mouse_left_pressed=0
+mouse_right_pressed=0
+
+mouse_global_pressed=0
+mouse_global_releasd=0
+
+integer mouse_startx,mouse_starty,mouse_selecting
+
+mouse_startx=0
+mouse_starty=0
+mouse_selecting=0
+
+
+--========================GAME ENGINE MODUALS=====================--
+include sprites.ew
+include sounds.ew
+include objects.ew
+include instances.ew
+include event.ew
+include values.ew
+include functions.ew
+
+
+
+function real(sequence string)
+sequence temp
+temp=value(string)
+return temp[2]
+end function
+
+integer music_on,sound_on,window_mode
+--settings on or off
+music_on=1
+sound_on=1
+window_mode=0
+
+
+procedure load_settings()
+  integer fn
+  object data
+  fn=open("settings.ini","r")
+ if fn=-1 then
+   --file not found defalut values will be used
+ else
+  data=gets(fn)
+  if sequence(data) then
+    data=real(data)
+    if data=0 or data=1 then
+      music_on=data
+    end if
+  end if
+  data=gets(fn)
+  if sequence(data) then
+    data=real(data)
+    if data=0 or data=1 then
+      sound_on=data
+    end if
+  end if
+  data=gets(fn)
+  if sequence(data) then
+    data=real(data)
+    if data=0 or data=1 then
+      window_mode=data
+    end if
+  end if
+  data=gets(fn)
+  if sequence(data) then
+    data=real(data)
+    if data>=0 or data<=1000 then
+      wait=data
+    end if
+  end if
+  close(fn)
+ end if
+end procedure
+load_settings()
+
+the_palette = allocate_palette()
+ret = allegro_init()
+ret = install_timer()
+ret = install_keyboard()
+ret = install_mouse()
+ret = reserve_voices (16, -1)
+ret = set_window_close_button(1)
+ret= install_sound (DIGI_AUTODETECT, MIDI_AUTODETECT, "")
+set_color_depth(16)
+set_volume(255, 255)
+
+set_window_title("Tile system")
+
+
+if window_mode=0 then
+  ret = set_gfx_mode(GFX_AUTODETECT_WINDOWED, window_width, window_height, 0,0)
+else
+  ret = set_gfx_mode(GFX_AUTODETECT_FULLSCREEN, window_width, window_height, 0,0)
+end if
+
+--========================LOAD BITMAPS================================--
+sequence image_buttons
+image_buttons={}
+image_buttons&=load_bitmap("buttons\\start_game_button.bmp", the_palette)
+image_buttons&=load_bitmap("buttons\\start2_game_button.bmp", the_palette)
+
+image_buttons&=load_bitmap("buttons\\options_game_button.bmp", the_palette)
+image_buttons&=load_bitmap("buttons\\options2_game_button.bmp", the_palette)
+
+image_buttons&=load_bitmap("buttons\\exit_game_button.bmp", the_palette)
+image_buttons&=load_bitmap("buttons\\exit2_game_button.bmp", the_palette)
+
+sequence image_panels
+image_panels={}
+image_panels&=load_bitmap("gui\\panel.bmp", the_palette)
+image_panels&=load_bitmap("gui\\panel2.bmp", the_palette)
+image_panels&=load_bitmap("gui\\panel3.bmp", the_palette)
+image_panels&=load_bitmap("gui\\infopanel.bmp", the_palette)
+
+
+atom cursor_gfx
+cursor_gfx=load_bitmap("cursor.bmp", the_palette)
+atom tile_gfx
+tile_gfx=load_bitmap("tiles\\tiles.bmp", the_palette)
+atom main_background
+main_background=load_bitmap("main background.bmp", the_palette)
+atom main_starcraft
+main_starcraft=load_bitmap("main starcraft.bmp", the_palette)
+
+
+set_palette(the_palette)
+buffer=create_bitmap(window_width, window_height)
+
+procedure delay(integer v)
+atom time1
+  time1=0
+  if v<0 then return end if
+  while time1<v do
+     time1+=0.0001
+  end while
+end procedure
+
+integer game_end
+game_end=0
+function game_exit()
+  game_end=1
+  return 1
+end function 
+set_window_close_hook(routine_id("game_exit"))
+
+
+
+
+constant tile_width=32,tile_height=32
+atom width_tiles,height_tiles,tile_view_w,tile_view_h
+sequence tiles_info
+
+
+
+tiles_info={}
+width_tiles=0
+height_tiles=0
+tile_view_w=(window_width/tile_width)
+tile_view_h=(window_height/tile_height)
+
+procedure load_tile_data(sequence fname)
+  integer fn
+  fn=open(fname,"r")
+  room_width=real(gets(fn))
+  room_height=real(gets(fn))
+
+  width_tiles=(room_width/tile_width)
+  height_tiles=(room_height/tile_height)
+
+  tiles_info={}
+  for i=1 to height_tiles do
+    tiles_info=append(tiles_info,repeat({0,0,0,0},width_tiles))
+  end for
+
+  for i=1 to height_tiles do
+    for j=1 to width_tiles do
+       tiles_info[i][j][1]=real(gets(fn))
+       tiles_info[i][j][2]=real(gets(fn))
+       tiles_info[i][j][3]=real(gets(fn))
+       tiles_info[i][j][4]=real(gets(fn))
+    end for
+  end for
+
+  close(fn)
+end procedure
+
+
+load_tile_data("level1\\tiles.txt")
+
+
+procedure draw_tiles()
+  integer tilex,tiley,tile_left,tile_top
+  integer tile_view_x,tile_view_y
+  
+  tile_view_x=floor(view_left/tile_width)+1
+  tile_view_y=floor(view_top/tile_height)+1
+
+  for i=tile_view_y to (tile_view_y+tile_view_h) do
+
+    for j=tile_view_x to (tile_view_x+tile_view_w) do
+
+       if i>0 and i<=height_tiles and j>0 and j<=width_tiles then
+         tilex=tiles_info[i][j][3]
+         tiley=tiles_info[i][j][4]
+         tile_left=tiles_info[i][j][1]
+         tile_top=tiles_info[i][j][2]
+
+         blit(tile_gfx,buffer,tile_left,tile_top,tilex-view_left,tiley-view_top,tile_width,tile_height)
+       end if
+
+
+    end for
+  end for
+
+end procedure
+
+sequence trees_info
+trees_info={}
+
+procedure load_tree_data(sequence fname)
+  integer fn,num
+  fn=open(fname,"r")
+
+  num=real(gets(fn))
+
+  for i=1 to num-1 do
+    trees_info=append(trees_info,{real(gets(fn)),real(gets(fn))})
+  end for
+
+  close(fn)
+end procedure
+
+
+load_tree_data("level1\\trees.txt")
+
+
+
+--==================================GAME ENGINE SYSTEM EVENT===========================--
+
+
+--reset all the input variables
+--stoping all other input event from executeing
+--affter this is called and the current event
+--has ended
+procedure io_clear()
+  mouse_button=0
+  mouse_left_pressed=0
+  mouse_right_pressed=0
+  mouse_global_pressed=0
+  mouse_global_releasd=0
+  mouse_startx=0
+  mouse_starty=0
+  mouse_selecting=0
+end procedure
+
+
+
+
+-- info[1] -- file name
+-- info[2] -- offsetx
+-- info[3] -- offsety
+-- info[4] -- bbox mode 0=automatic 1=fullimage 2=manual
+-- info[5] -- is a sequence of the manual bbox settings
+-- info[6] -- pixel prefect collsion detction
+-- info[7] -- transparent bool true or false
+integer spr_tree
+spr_tree=add_sprite({"tree.BMP",16,51,2,{5,47,27,59},0,1})
+
+integer spr_destination
+spr_destination=add_sprite_strip({"destination.BMP",8,8,0,{0,0,0,0},0,1,6})
+
+integer spr_selectors
+spr_selectors=add_sprite_strip({"selectors.BMP",8,3,0,{0,0,0,0},0,1,3})
+
+integer spr_marine_n
+spr_marine_n=add_sprite_strip({"humans\\units\\marine\\marine_n.BMP",8,8,2,{4,8,12,12},0,1,3})
+
+integer spr_marine_ne
+spr_marine_ne=add_sprite_strip({"humans\\units\\marine\\marine_ne.BMP",8,8,2,{4,8,12,12},0,1,3})
+
+integer spr_marine_nw
+spr_marine_ne=add_sprite_strip({"humans\\units\\marine\\marine_nw.BMP",8,8,2,{4,8,12,12},0,1,3})
+
+integer spr_marine_e
+spr_marine_ne=add_sprite_strip({"humans\\units\\marine\\marine_e.BMP",8,8,2,{4,8,12,12},0,1,3})
+
+integer spr_marine_s
+spr_marine_ne=add_sprite_strip({"humans\\units\\marine\\marine_s.BMP",8,8,2,{4,8,12,12},0,1,3})
+
+integer spr_marine_se
+spr_marine_ne=add_sprite_strip({"humans\\units\\marine\\marine_se.BMP",8,8,2,{4,8,12,12},0,1,3})
+
+integer spr_marine_sw
+spr_marine_ne=add_sprite_strip({"humans\\units\\marine\\marine_sw.BMP",8,8,2,{4,8,12,12},0,1,3})
+
+integer spr_marine_w
+spr_marine_ne=add_sprite_strip({"humans\\units\\marine\\marine_w.BMP",8,8,2,{4,8,12,12},0,1,3})
+
+integer spr_vce_n
+spr_vce_n=add_sprite_strip({"humans\\units\\vce\\vce_n.BMP",8,8,2,{1,8,14,12},0,1,2})
+
+integer spr_vce_s
+spr_vce_s=add_sprite_strip({"humans\\units\\vce\\vce_s.BMP",8,8,2,{1,8,14,12},0,1,2})
+
+integer spr_vce_w
+spr_vce_w=add_sprite_strip({"humans\\units\\vce\\vce_w.BMP",8,8,2,{1,8,14,12},0,1,2})
+
+integer spr_vce_e
+spr_vce_e=add_sprite_strip({"humans\\units\\vce\\vce_e.BMP",8,8,2,{1,8,14,12},0,1,2})
+
+integer spr_vce_ne
+spr_vce_ne=add_sprite_strip({"humans\\units\\vce\\vce_ne.BMP",8,8,2,{1,8,14,12},0,1,2})
+
+integer spr_vce_nw
+spr_vce_nw=add_sprite_strip({"humans\\units\\vce\\vce_nw.BMP",8,8,2,{1,8,14,12},0,1,2})
+
+integer spr_vce_se
+spr_vce_se=add_sprite_strip({"humans\\units\\vce\\vce_se.BMP",8,8,2,{1,8,14,12},0,1,2})
+
+integer spr_vce_sw
+spr_vce_sw=add_sprite_strip({"humans\\units\\vce\\vce_sw.BMP",8,8,2,{1,8,14,12},0,1,2})
+
+
+--gui buttons
+
+integer spr_create_command_center
+spr_create_command_center=add_sprite({"humans\\command buttons\\create command center.BMP",0,0,2,{4,4,12,12},0,1})
+
+integer spr_create_barracks
+spr_create_barracks=add_sprite({"humans\\command buttons\\create barracks.BMP",0,0,2,{4,4,12,12},0,1})
+
+integer spr_create_factory
+spr_create_factory=add_sprite({"humans\\command buttons\\create factory.BMP",0,0,2,{4,4,12,12},0,1})
+
+integer spr_create_power
+spr_create_power=add_sprite({"humans\\command buttons\\create power.BMP",0,0,2,{4,4,12,12},0,1})
+
+integer spr_create_tower
+spr_create_tower=add_sprite({"humans\\command buttons\\create tower.BMP",0,0,2,{4,4,12,12},0,1})
+
+integer spr_create_marine
+spr_create_marine=add_sprite({"humans\\command buttons\\create marine.BMP",0,0,2,{4,4,12,12},0,1})
+
+integer spr_create_vce
+spr_create_vce=add_sprite({"humans\\command buttons\\create vce.BMP",0,0,2,{4,4,12,12},0,1})
+
+integer spr_create_tank
+spr_create_tank=add_sprite({"humans\\command buttons\\create tank.BMP",0,0,2,{4,4,12,12},0,1})
+
+integer spr_create_viper
+spr_create_viper=add_sprite({"humans\\command buttons\\create viper.BMP",0,0,2,{4,4,12,12},0,1})
+
+integer spr_create_goliath
+spr_create_goliath=add_sprite({"humans\\command buttons\\create goliath.BMP",0,0,2,{4,4,12,12},0,1})
+
+integer spr_create_relay
+spr_create_relay=add_sprite({"humans\\command buttons\\create relay.BMP",0,0,2,{4,4,12,12},0,1})
+
+integer spr_create_mine
+spr_create_mine=add_sprite({"humans\\command buttons\\create mine.BMP",0,0,2,{4,4,12,12},0,1})
+
+integer spr_create_dido
+spr_create_dido=add_sprite({"humans\\command buttons\\create dido.BMP",0,0,2,{4,4,12,12},0,1})
+
+
+-- human buildings
+integer spr_command_center
+spr_command_center=add_sprite({"humans\\buildings\\command center.bmp",32,39,2,{1,21,62,57},0,1})
+add_image_to_sprite(spr_command_center,"humans\\buildings\\command center select.bmp")
+
+integer spr_barracks
+spr_barracks=add_sprite({"humans\\buildings\\barracks.bmp",32,39,2,{1,21,62,57},0,1})
+add_image_to_sprite(spr_barracks,"humans\\buildings\\barracks select.bmp")
+
+integer spr_factory
+spr_factory=add_sprite({"humans\\buildings\\factory.bmp",32,39,2,{1,21,62,57},0,1})
+add_image_to_sprite(spr_factory,"humans\\buildings\\factory select.bmp")
+
+integer spr_power
+spr_power=add_sprite({"humans\\buildings\\power.bmp",32,39,2,{1,21,62,57},0,1})
+
+integer spr_tower
+spr_tower=add_sprite_strip({"humans\\buildings\\tower.bmp",33,37,2,{22,40,44,55},0,1,4})
+
+
+integer spr_build_command_center
+spr_build_command_center=add_sprite({"humans\\buildings\\builders\\build command center.bmp",32,39,2,{1,21,62,57},0,1})
+
+integer spr_build_barracks
+spr_build_barracks=add_sprite({"humans\\buildings\\builders\\build barracks.bmp",32,39,2,{1,21,62,57},0,1})
+
+integer spr_build_factory
+spr_build_factory=add_sprite({"humans\\buildings\\builders\\build factory.bmp",32,39,2,{1,21,62,57},0,1})
+
+integer spr_build_power
+spr_build_power=add_sprite({"humans\\buildings\\builders\\build power.bmp",32,39,2,{1,21,62,57},0,1})
+
+integer spr_build_tower
+spr_build_tower=add_sprite({"humans\\buildings\\builders\\build tower.bmp",33,37,2,{22,40,44,55},0,1})
+
+
+
+
+--=======================================objects event system================================================--
+--this is object control global mouse button varaible
+global integer global_mouse_button
+global_mouse_button=0
+
+
+
+procedure obj_control_events(integer event)
+
+  if event=EVENT_CREATE then
+
+  elsif event=EVENT_MOUSE_GLOBAL_PRESSED then
+    global_mouse_button=mouse_button
+  elsif event=EVENT_DRAW then
+    draw_sprite(buffer,image_panels[1],500,380) --panel 1
+    draw_sprite(buffer,image_panels[2],416,380) --panel 2
+    draw_sprite(buffer,image_panels[3],204,386) --panel 3
+    draw_sprite(buffer,image_panels[4],20,300) --info panel
+	
+	draw_lookup_collision()
+
+  end if
+
+end procedure
+
+integer obj_control
+obj_control=object_add({spr_vce_s,1,1,1280,0,routine_id("obj_control_events")})
+object_event_add(obj_control,EVENT_CREATE)
+object_event_add(obj_control,EVENT_MOUSE_GLOBAL_PRESSED)
+object_event_add(obj_control,EVENT_DRAW)
+
+
+
+procedure obj_selectors_events(integer event)
+
+  if event=EVENT_CREATE then
+    set_image_single(self,0)
+    set_depth(self,floor(get_y(self)))
+    instance_destory(self)
+  end if
+
+end procedure
+
+-- info[1] sprite index
+-- info[2] visable
+-- info[3] solid
+-- info[4] depth
+-- info[5] persistent
+-- info[6] routine id
+integer obj_selectors
+obj_selectors=object_add({spr_selectors,1,0,1270,0,routine_id("obj_selectors_events")})
+object_event_add(obj_selectors,EVENT_CREATE)
+
+
+procedure obj_tree_events(integer event)
+  if event=EVENT_CREATE then
+    set_depth(self,get_y(self))
+  end if
+end procedure
+
+
+integer marine_target_x,marine_target_y
+marine_target_x=0
+marine_target_y=0
+
+
+procedure obj_marine_events(integer event)
+atom target_x,target_y
+
+  if event=EVENT_CREATE then
+    marine_target_x=add_variable(self,0)
+    marine_target_y=add_variable(self,0)
+  elsif event=EVENT_STEP then
+
+    target_x=get_variable(self,marine_target_x)
+    target_y=get_variable(self,marine_target_y)
+
+    
+
+    mp_potential_step(self, target_x , target_y ,2, 0)
+
+--and get_speed(self)!=0
+
+    if point_distance(get_x(self),get_y(self), target_x,target_y)< (70*1.2)  then
+      target_x=get_x(self)
+      target_y=get_y(self)
+      set_variable(self,marine_target_x,target_x)
+      set_variable(self,marine_target_y,target_y) 
+    end if
+
+    set_depth(self,floor(get_y(self)))
+
+  elsif event=EVENT_MOUSE_GLOBAL_RELEASED then
+    target_x=view_mousex
+    target_y=view_mousey
+    set_variable(self,marine_target_x,target_x)
+    set_variable(self,marine_target_y,target_y)
+  end if
+end procedure
+
+
+
+
+integer obj_vce
+integer obj_command_center
+integer obj_create_command_center
+
+
+integer vce_target_x,vce_target_y,vce_selected,vce_life,vce_totallife
+vce_target_x=0
+vce_target_y=0
+vce_selected=0
+vce_life=0
+vce_totallife=0
+
+
+
+procedure obj_vce_events(integer event)
+atom target_x,target_y,selected
+atom temp_w,temp_h,x,y,direction
+
+  if event=EVENT_CREATE then
+    vce_target_x=add_variable(self,get_x(self))
+    vce_target_y=add_variable(self,get_y(self))
+    vce_selected=add_variable(self,0)
+
+    vce_life=add_variable(self,65)
+    vce_totallife=add_variable(self,65)
+
+  elsif event=EVENT_STEP then
+    move_outside_solid(self, rand(360),100)
+
+    target_x=get_variable(self,vce_target_x)
+    target_y=get_variable(self,vce_target_y)
+    mp_potential_step(self, target_x , target_y ,2, 0)
+
+    set_depth(self,floor(get_y(self)))
+
+    if point_distance(get_x(self),get_y(self), target_x,target_y)< (instance_number(obj_vce)*1.2)  then
+      target_x=get_x(self)
+      target_y=get_y(self)
+      set_variable(self,vce_target_x,target_x)
+      set_variable(self,vce_target_y,target_y) 
+    end if
+
+    selected=get_variable(self,vce_selected)
+
+    if selected=1 then
+      ret=instance_create(obj_selectors,floor(get_x(self)),floor(get_y(self))+1)
+
+      if instance_number(obj_command_center)=0 and instance_number(obj_create_command_center)=0 then
+        ret=instance_create(obj_create_command_center,view_left+506,view_top+386)
+      end if
+    end if
+
+
+    if instance_info[self][INS_PX]=instance_info[self][INS_X] then
+      if instance_info[self][INS_PY]=instance_info[self][INS_Y] then
+        set_image_single(self,0)
+      end if
+    else
+      set_image_single(self,-1)
+    end if
+
+    direction=get_dir(self)
+    if direction>22 then
+      change_sprite(self,spr_vce_ne)
+    end if
+    if direction>67 then
+      change_sprite(self,spr_vce_n)
+    end if
+    if direction>113 then
+      change_sprite(self,spr_vce_nw)
+    end if
+    if direction>157 then
+      change_sprite(self,spr_vce_w)
+    end if
+    if direction>202 then
+      change_sprite(self,spr_vce_sw)
+    end if
+    if direction>247 then
+      change_sprite(self,spr_vce_s)
+    end if 
+    if direction>292 then
+      change_sprite(self,spr_vce_se)
+    end if
+    if direction>337 then
+      change_sprite(self,spr_vce_e)
+    end if
+    if direction<22 then
+      change_sprite(self,spr_vce_e)
+    end if
+
+
+
+  elsif event=EVENT_MOUSE_GLOBAL_PRESSED then
+    
+    selected=get_variable(self,vce_selected)
+
+    if global_mouse_button=mb_right and selected=1 then
+      target_x=view_mousex
+      target_y=view_mousey
+      set_variable(self,vce_target_x,target_x)
+      set_variable(self,vce_target_y,target_y)
+    end if
+
+  elsif event=EVENT_MOUSE_GLOBAL_RELEASED then
+    if global_mouse_button=mb_left then--and mousey<380 then
+
+      temp_w=abs(view_mousex-mouse_startx)
+      temp_h=abs(view_mousey-mouse_starty)
+
+      x=floor(get_x(self))
+      y=floor(get_y(self))
+      if check_bb_collision_general( x , y , get_width(self) , get_height(self), view_mousex, view_mousey, temp_w, temp_h)=1 then
+        selected=1
+      elsif check_bb_collision_general( x , y , get_width(self) , get_height(self), mouse_startx, mouse_starty, temp_w, temp_h)=1 then
+        selected=1
+      elsif check_bb_collision_general( x , y , get_width(self) , get_height(self), mouse_startx, view_mousey, temp_w, temp_h)=1 then
+        selected=1
+      elsif check_bb_collision_general( x , y , get_width(self) , get_height(self), view_mousex, mouse_starty, temp_w, temp_h)=1 then
+        selected=1
+      else
+        selected=0
+        set_variable(self,vce_selected,selected)
+        if variable_has_value_for_all_objects(obj_vce,vce_selected,0)=1 then
+          instance_destroy_all_of_object_type(obj_create_command_center)
+        end if
+      end if
+      set_variable(self,vce_selected,selected)
+    end if
+
+
+  end if
+end procedure
+
+
+-- info[1] sprite index
+-- info[2] visable
+-- info[3] solid
+-- info[4] depth
+-- info[5] persistant
+-- info[6] routine id
+integer obj_tree
+obj_tree=object_add({spr_tree,1,1,0,0,routine_id("obj_tree_events")})
+object_event_add(obj_tree,EVENT_CREATE)
+
+
+integer obj_marine
+
+
+obj_marine=object_add({spr_marine_n,1,1,1280,0,routine_id("obj_marine_events")})
+object_event_add(obj_marine,EVENT_CREATE)
+object_event_add(obj_marine,EVENT_STEP)
+object_event_add(obj_marine,EVENT_MOUSE_GLOBAL_RELEASED)
+
+
+
+obj_vce=object_add({spr_vce_s,1,1,1280,0,routine_id("obj_vce_events")})
+object_event_add(obj_vce,EVENT_CREATE)
+object_event_add(obj_vce,EVENT_STEP)
+object_event_add(obj_vce,EVENT_MOUSE_GLOBAL_PRESSED)
+object_event_add(obj_vce,EVENT_MOUSE_GLOBAL_RELEASED)
+
+
+
+procedure obj_command_center_id(integer event)
+   if event=EVENT_CREATE then
+    set_depth(self,get_y(self))
+   end if
+end procedure
+
+
+obj_command_center=object_add({spr_command_center,1,1,0,0,routine_id("obj_command_center_id")})
+object_event_add(obj_command_center,EVENT_CREATE)
+
+
+
+
+integer build_command_center_move
+
+
+procedure obj_build_command_center_id(integer event)
+integer move
+   if event=EVENT_CREATE then
+     build_command_center_move=add_variable(self,1)
+     set_depth(self,get_y(self))
+   elsif event=EVENT_STEP then
+     set_depth(self,get_y(self))
+
+     move=get_variable(self,build_command_center_move)
+
+     if move=1 then
+       if position_collision_free222(self,view_mousex,view_mousey,0) then
+         set_x(self,view_mousex)
+         set_y(self,view_mousey)
+       end if
+     end if
+   end if
+end procedure
+
+integer obj_build_command_center
+obj_build_command_center=object_add({spr_build_command_center,1,0,0,0,routine_id("obj_build_command_center_id")})
+object_event_add(obj_build_command_center,EVENT_CREATE)
+object_event_add(obj_build_command_center,EVENT_STEP)
+
+
+
+procedure obj_create_command_center_id(integer event)
+   if event=EVENT_CREATE then
+     set_depth(self,999999)
+   elsif event=EVENT_STEP then
+     set_x(self,view_left+506)
+     set_y(self,view_top+386)
+   elsif event=EVENT_MOUSE_LEFT_RELEASED then
+     io_clear()
+     ret=instance_create(obj_build_command_center,view_mousex,view_mousey)
+   end if
+end procedure
+
+
+
+
+obj_create_command_center=object_add({spr_create_command_center,1,1,0,0,routine_id("obj_create_command_center_id")})
+object_event_add(obj_create_command_center,EVENT_CREATE)
+object_event_add(obj_create_command_center,EVENT_STEP)
+object_event_add(obj_create_command_center,EVENT_MOUSE_LEFT_RELEASED)
+
+
+
+
+
+set_bbox_for_all_sprites()
+
+
+instance_number_list_create()
+
+ret=instance_create(obj_control,32,32)
+
+
+for i=1 to length(trees_info) do
+  ret=instance_create(obj_tree,trees_info[i][1],trees_info[i][2])
+end for
+
+
+for i=1 to 50 do
+ -- ret=instance_create(obj_marine,32+(16*i),64)
+end for
+
+for i=1 to 20 do
+  if i<50 then
+    ret=instance_create(obj_vce,32+(16*i),128)
+  elsif i<100 then
+    ret=instance_create(obj_vce,32+(16*(i-50)),164)
+  elsif i<150 then
+    ret=instance_create(obj_vce,32+(16*(i-100)),194)
+  else
+    ret=instance_create(obj_vce,32+(16*(i-150)),224)
+  end if
+end for
+
+
+
+--============================================
+
+
+
+while 1 do
+
+
+if game_end=1 then
+  exit
+end if
+
+fps1+=1
+
+if timer1<time() then
+  timer1=time()+1
+  fps2=fps1
+  fps1=0
+   if fps2>limit then
+     if (fps2-limit)>50 then
+       wait+=20
+     elsif (fps2-limit)>30 then
+       wait+=10
+     elsif (fps2-limit)>10 then
+       wait+=5
+     elsif (fps2-limit)>9 then
+       wait+=9
+     elsif (fps2-limit)>8 then
+       wait+=8
+     elsif (fps2-limit)>7 then
+       wait+=7
+     elsif (fps2-limit)>6 then
+       wait+=6
+     elsif (fps2-limit)>5 then
+       wait+=5
+     elsif (fps2-limit)>4 then
+       wait+=4
+     elsif (fps2-limit)>3 then
+       wait+=3
+     elsif (fps2-limit)>2 then
+       wait+=2
+     elsif (fps2-limit)>1 then
+       wait+=1
+     elsif (fps2-limit)>0 then
+       wait+=(fps2-limit)
+     end if
+   elsif fps2<limit then
+     if (fps2-limit)<-50 then
+       wait-=20
+     elsif (fps2-limit)<-30 then
+       wait-=10
+     elsif (fps2-limit)<-10 then
+       wait-=10
+     elsif (fps2-limit)<-9 then
+       wait-=9
+     elsif (fps2-limit)<-8 then
+       wait-=8
+     elsif (fps2-limit)<-7 then
+       wait-=7
+     elsif (fps2-limit)<-6 then
+       wait-=6
+     elsif (fps2-limit)<-5 then
+       wait-=5
+     elsif (fps2-limit)<-4 then
+       wait-=4
+     elsif (fps2-limit)<-3 then
+       wait-=3
+     elsif (fps2-limit)<-2 then
+       wait-=2
+     elsif (fps2-limit)<-1 then
+       wait-=1
+     end if
+   end if
+end if
+
+if game_mode=0 then
+
+  mousex=mouse_x()
+  mousey=mouse_y()
+
+  time1+=1
+  if time1>6 then
+    
+    if key(KEY_ESC) then
+      time1=0
+      exit
+    end if
+
+    if key(KEY_UP) then
+      time1=0
+
+    end if
+
+    if key(KEY_DOWN) then
+      time1=0
+
+    end if
+
+    if key(KEY_LEFT) then
+      time1=0
+
+    end if
+
+    if key(KEY_RIGHT) then
+      time1=0
+
+    end if
+
+    if key(KEY_ENTER) then
+      time1=0
+ 
+    end if
+    
+  end if
+
+  blit(main_background,buffer,0,0,0,0,window_width,window_height)
+  blit(main_starcraft,buffer,0,0,0,0,643,132)
+
+
+  
+  draw_sprite(buffer,image_buttons[1], 260,140)
+  if mousex>=260 and mousex<=260+128 and mousey>=140 and mousey<=140+64 then
+    draw_sprite(buffer,image_buttons[2], 260,140)
+    if and_bits(mouse_b(),1) then
+      game_mode=1
+      mouse_global_releasd=0
+    end if
+  end if
+
+  draw_sprite(buffer,image_buttons[3], 260,220)
+  if mousex>=260 and mousex<=260+128 and mousey>=220 and mousey<=220+64 then
+    draw_sprite(buffer,image_buttons[4], 260,220)
+  end if
+
+  draw_sprite(buffer,image_buttons[5], 260,300)
+  if mousex>=260 and mousex<=260+128 and mousey>=300 and mousey<=300+64 then
+    draw_sprite(buffer,image_buttons[6], 260,300)
+    if and_bits(mouse_b(),1) then
+      exit
+    end if
+  end if
+
+
+
+  draw_sprite(buffer,cursor_gfx,mousex,mousey)
+  textout_ex(buffer,font, sprint(fps2) ,20, 20, rgb(255,255,255),-1 )
+  blit(buffer,screen,0,0,0,0,window_width,window_height)
+
+elsif game_mode=1 then
+
+  mousex=mouse_x()
+  mousey=mouse_y()
+  view_mousex=mouse_x()+view_left
+  view_mousey=mouse_y()+view_top
+
+  time1+=1
+  if time1>1 then
+    
+    if key(KEY_ESC) then
+      time1=0
+      exit
+    end if
+
+    if key(KEY_UP) then
+      time1=0
+      view_top-=view_scroll_rate
+      if view_top<0 then
+        view_top=0
+      end if
+    end if
+    if key(KEY_DOWN) then
+      time1=0
+      view_top+=view_scroll_rate
+      if view_top+window_height>room_height then
+        view_top=room_height-window_height
+      end if
+    end if
+
+    if key(KEY_LEFT) then
+      time1=0
+      view_left-=view_scroll_rate
+      if view_left<0 then
+        view_left=0
+      end if
+    end if
+
+    if key(KEY_RIGHT) then
+      time1=0
+      view_left+=view_scroll_rate
+      if view_left+window_width>room_width then
+        view_left=room_width-window_width
+      end if
+    end if
+
+    if key(KEY_ENTER) then
+      time1=0
+ 
+    end if
+
+    if mousex<=32 then 
+      time1=0
+      view_left-=view_scroll_rate
+      if view_left<0 then
+        view_left=0
+      end if
+    elsif mousex>=(window_width-32)  then
+      time1=0
+      view_left+=view_scroll_rate
+      if view_left+window_width>room_width then
+        view_left=room_width-window_width
+      end if
+    end if
+
+    if mousey<=32 then
+      time1=0
+      view_top-=view_scroll_rate
+      if view_top<0 then
+        view_top=0
+      end if
+    elsif mousey>=(window_height-32) then
+      time1=0
+      view_top+=view_scroll_rate
+      if view_top+window_height>room_height then
+        view_top=room_height-window_height
+      end if
+    end if
+    
+  end if
+
+  --clear_bitmap(buffer)
+
+  if and_bits(mouse_b(),mb_left) and mouse_left_pressed=0 then
+    mouse_startx=view_mousex
+    mouse_starty=view_mousey
+    mouse_left_pressed=1
+    mouse_selecting=1
+    mouse_global_pressed=1
+    mouse_button=mb_left
+  end if
+
+  if mouse_left_pressed=1 and and_bits(mouse_b(),mb_left)=0 then
+    mouse_left_pressed=0
+    mouse_selecting=0
+    mouse_global_releasd=1
+  end if
+
+  if and_bits(mouse_b(),mb_right) and mouse_right_pressed=0 then
+    mouse_startx=view_mousex
+    mouse_starty=view_mousey
+    mouse_right_pressed=1
+    mouse_selecting=1
+    mouse_global_pressed=1
+    mouse_button=mb_right
+  end if
+
+  if mouse_right_pressed=1 and and_bits(mouse_b(),mb_right)=0 then
+    mouse_right_pressed=0
+    mouse_selecting=0
+    mouse_global_releasd=1
+  end if
+
+  
+  draw_tiles()
+
+  instance_number_list_create()
+  
+
+  count_collision=0
+
+
+  --?mouse_global_pressed
+  game_step()
+  mouse_global_pressed=0
+  mouse_global_releasd=0
+
+
+  --draw_lookup_collision()
+
+  if mouse_selecting=1 then
+    rect(buffer,mouse_startx-view_left,mouse_starty-view_top,mousex,mousey,rgb(0,255,0))
+  end if
+  
+  draw_sprite(buffer,cursor_gfx,mousex,mousey)--draws the cursor
+
+  textout_ex(buffer,font, sprint(fps2)&"  "&sprint(count_collision) ,20, 20, rgb(255,255,255),-1 )
+  blit(buffer,screen,0,0,0,0,window_width,window_height)
+
+  --?instance_number(obj_create_command_center)
+  --?variable_has_value_for_all_objects(obj_vce,vce_selected,1)
+end if
+
+  --delay(wait)
+end while
+
+
+integer fn
+fn=open("settings.ini","w")
+  puts(fn,sprint(music_on)&"\n")
+  puts(fn,sprint(sound_on)&"\n")
+  puts(fn,sprint(window_mode)&"\n")
+  if wait<0 then
+    puts(fn,"0\n")
+  else
+    puts(fn,sprint(wait)&"\n")
+  end if
+close(fn)
+
+
+for i=1 to length(image_buttons) do
+  destroy_bitmap(image_buttons[i])
+end for
+for i=1 to length(image_panels) do
+  destroy_bitmap(image_panels[i])
+end for
+destroy_palette(the_palette)
+destroy_bitmap(tile_gfx)
+destroy_bitmap(cursor_gfx)
+destroy_bitmap(buffer)
+destroy_bitmap(main_background)
+destroy_bitmap(main_starcraft)
+destroy_sprites()
+
+allegro_exit()

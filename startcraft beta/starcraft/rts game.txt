@@ -1,0 +1,57 @@
+i think it might be better to build the
+game engine in small steps
+
+like building the movement system and then
+the combat system
+
+need a good movement system that runs
+fast even with 200 units
+100 player 100 enemy limited
+
+so far the movement system is still
+quite slow and there are still problems
+with the units moveing around the map
+without gettings stuck in trees
+once all these problems are fixeds
+then would need to move on to the
+combat system
+
+the combat system needs to work
+well
+
+affter the combat system there workers
+and building systems
+
+
+the game would need some sort of story
+mode buit up by useing the tigger editor
+and heros charertes
+
+would like to have a network verions
+but thats way of could build a network
+game where there are only units that
+get given to you at the start to battle
+with the enemy could be a two player game
+where you both fight each other would only
+need the movement system and combat system
+to make this game plus could choose the
+zarg or human race to fight with more
+of a taticl rts game 
+
+what about some high ground where units
+can fire from and get bounce attack
+power for attack form high ground would
+need some new isomcl sprites i don't have
+any
+
+
+would need a user interface
+for saveing and loading games
+
+c++ version of this game might be required
+to have 200 plus units in the game and
+then there are buildings that would need
+more computeing power i don't think the
+euphoria version will run very fast on a 
+slow computer like my 1.73 ghz cpu 1gb ram
+128 graphics card

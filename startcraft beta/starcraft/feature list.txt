@@ -1,0 +1,18 @@
+Feature List
+
+room are save in map files to be load
+will need a map editor or command-line
+program to create the map files
+diffrent room size must be done
+
+tigger editor or tigger system
+this is like a secondary
+event system that check for
+rts type event like when a unit
+is destoryed or units enter
+a spercifc area then a action
+would happen like 
+
+transporting units around the map
+wining the game or loseing
+playing a sound or movie

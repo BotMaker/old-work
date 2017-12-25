@@ -1,0 +1,1844 @@
+without warning
+without type_check
+
+include machine.e
+crash_message("An unexpected error has occurred!\n" &
+              "Please contact gareth_mcdaid@yahoo.co.uk\n" &
+              "Do not delete the file \"ex.err\".\n")
+
+
+include euallegro.ew
+include file.e
+include misc.e
+include sort.e
+
+atom buffer
+atom the_palette
+integer ret
+integer window_width,window_height
+integer view_left,view_top
+integer room_width,room_height
+integer fps1,fps2
+atom timer1
+window_width=640
+window_height=500
+view_left=0
+view_top=0
+room_width=640
+room_height=500
+fps1=0
+fps2=0
+timer1=0
+
+integer need_points,music_on,sound_on,wait,window_mode,fullscreen_scale,game_win
+--settings on or off
+music_on=1
+sound_on=1
+need_points=1
+window_mode=0
+fullscreen_scale=0
+wait=0
+game_win=0
+
+function real(sequence string)
+sequence temp
+temp=value(string)
+return temp[2]
+end function
+
+procedure load_settings()
+  integer fn
+  object data
+  fn=open("settings.ini","r")
+ if fn=-1 then
+   --file not found defalut values will be used
+ else
+  data=gets(fn)
+  if sequence(data) then
+    data=real(data)
+    if data=0 or data=1 then
+      music_on=data
+    end if
+  end if
+  data=gets(fn)
+  if sequence(data) then
+    data=real(data)
+    if data=0 or data=1 then
+      sound_on=data
+    end if
+  end if
+  data=gets(fn)
+  if sequence(data) then
+    data=real(data)
+    if data=0 or data=1 then
+      need_points=data
+    end if
+  end if
+  data=gets(fn)
+  if sequence(data) then
+    data=real(data)
+    if data=0 or data=1 then
+      window_mode=data
+    end if
+  end if
+  data=gets(fn)
+  if sequence(data) then
+    data=real(data)
+    if data=0 or data=1 then
+      fullscreen_scale=data
+    end if
+  end if
+  data=gets(fn)
+  if sequence(data) then
+    data=real(data)
+    if data>=0 or data<=1000 then
+      wait=data
+    end if
+  end if
+  data=gets(fn)
+  if sequence(data) then
+    data=real(data)
+    if data=0 or data=1 then
+      game_win=data
+    end if
+  end if
+  close(fn)
+ end if
+end procedure
+load_settings()
+
+the_palette = allocate_palette()
+ret = allegro_init()
+ret = install_timer()
+ret = install_keyboard()
+ret = install_mouse()
+ret = reserve_voices (16, -1)
+ret = set_window_close_button(1)
+ret= install_sound (DIGI_AUTODETECT, MIDI_AUTODETECT, "")
+set_color_depth(16)
+
+if window_mode=0 then
+  ret = set_gfx_mode(GFX_AUTODETECT_WINDOWED, window_width, window_height, 0,0)
+else
+  ret = set_gfx_mode(GFX_AUTODETECT_FULLSCREEN, 800, 600, 0,0)
+end if
+
+function rgb( integer r, integer g, integer b )
+    return b + g * 256 + r * 65536
+end function
+
+set_window_title("Ghost Maze 2")
+
+sequence images,menu_images,setup_images
+sequence game_grid,undo
+sequence passwords,password
+integer col,row
+integer score
+integer game_mode
+integer menu_index
+integer room_index,room_last
+integer skip_room
+room_index=1
+room_last=0
+undo={}
+game_grid={}
+images={}
+setup_images={}
+col=0
+row=0
+score=0
+game_mode=0
+menu_index=0
+menu_images={}
+password={}
+skip_room=0
+
+sequence music
+music={}
+music&=load_midi("sounds\\music1.mid")
+music&=load_midi("sounds\\music2.mid")
+music&=load_midi("sounds\\music3.mid")
+music&=load_midi("sounds\\music4.mid")
+music&=load_midi("sounds\\music5.mid")
+
+procedure play_music()
+  if music_on=1 then
+    ret=play_midi(music[rand(length(music))], 1)
+  end if
+end procedure
+play_music()
+
+atom door_sfx
+door_sfx=load_sample("sounds\\door_pass.wav")
+atom point_sfx
+point_sfx=load_sample("sounds\\point_eat.wav")
+atom select_move_sfx
+select_move_sfx=load_sample("sounds\\select_move.wav")
+atom select_choose_sfx
+select_choose_sfx=load_sample("sounds\\select_choose.wav")
+atom boom_sfx
+boom_sfx=load_sample("sounds\\explosion.wav")
+
+procedure play_sound_point()
+  if sound_on=1 then
+    ret=play_sample (point_sfx, 255, 128, 1000, 0)
+  end if
+end procedure
+
+procedure play_sound_door()
+  if sound_on=1 then
+    ret=play_sample (door_sfx, 255, 128, 1000, 0)
+  end if
+end procedure
+
+procedure play_sound_boom()
+  if sound_on=1 then
+    ret=play_sample (boom_sfx, 255, 128, 1000, 0)
+  end if
+end procedure
+
+procedure play_sound_select_move()
+  if sound_on=1 then
+    ret=play_sample (select_move_sfx, 100, 128, 1000, 0)
+  end if
+end procedure
+
+procedure play_sound_select_choose()
+  if sound_on=1 then
+    ret=play_sample (select_choose_sfx, 100, 128, 1000, 0)
+  end if
+end procedure
+
+images &= load_bitmap("images\\back.bmp", the_palette)
+images &= load_bitmap("images\\player.bmp", the_palette)
+images &= load_bitmap("images\\wall.bmp", the_palette)
+images &= load_bitmap("images\\wall break.bmp", the_palette)
+images &= load_bitmap("images\\push.bmp", the_palette)
+images &= load_bitmap("images\\point.bmp", the_palette)
+images &= load_bitmap("images\\boom.bmp", the_palette)
+images &= load_bitmap("images\\exit.bmp", the_palette)
+images &= load_bitmap("images\\red key.bmp", the_palette)
+images &= load_bitmap("images\\blue key.bmp", the_palette)
+images &= load_bitmap("images\\yellow key.bmp", the_palette)
+images &= load_bitmap("images\\green key.bmp", the_palette)
+images &= load_bitmap("images\\red door.bmp", the_palette)
+images &= load_bitmap("images\\blue door.bmp", the_palette)
+images &= load_bitmap("images\\yellow door.bmp", the_palette)
+images &= load_bitmap("images\\green door.bmp", the_palette)
+images &= load_bitmap("images\\s_point.bmp", the_palette)
+images &= load_bitmap("images\\help.bmp", the_palette)
+images &= load_bitmap("images\\keyboard.bmp", the_palette)
+images &= load_bitmap("images\\about.bmp", the_palette)
+
+menu_images&=load_bitmap("images\\new_menu.bmp", the_palette)
+menu_images&=load_bitmap("images\\new_menu1.bmp", the_palette)
+menu_images&=load_bitmap("images\\pass_menu.bmp", the_palette)
+menu_images&=load_bitmap("images\\pass_menu1.bmp", the_palette)
+menu_images&=load_bitmap("images\\edit_level_menu.bmp", the_palette)
+menu_images&=load_bitmap("images\\edit_level1_menu.bmp", the_palette)
+menu_images&=load_bitmap("images\\setup_menu.bmp", the_palette)
+menu_images&=load_bitmap("images\\setup_menu1.bmp", the_palette)
+menu_images&=load_bitmap("images\\help_menu.bmp", the_palette)
+menu_images&=load_bitmap("images\\help_menu1.bmp", the_palette)
+menu_images&=load_bitmap("images\\about_menu.bmp", the_palette)
+menu_images&=load_bitmap("images\\about_menu1.bmp", the_palette)
+menu_images&=load_bitmap("images\\exit_menu.bmp", the_palette)
+menu_images&=load_bitmap("images\\exit_menu1.bmp", the_palette)
+
+setup_images&=load_bitmap("images\\music.bmp", the_palette)
+setup_images&=load_bitmap("images\\sound.bmp", the_palette)
+setup_images&=load_bitmap("images\\sapphires.bmp", the_palette)
+setup_images&=load_bitmap("images\\display.bmp", the_palette)
+setup_images&=load_bitmap("images\\window.bmp", the_palette)
+setup_images&=load_bitmap("images\\window1.bmp", the_palette)
+setup_images&=load_bitmap("images\\fullscreen.bmp", the_palette)
+setup_images&=load_bitmap("images\\fullscreen1.bmp", the_palette)
+setup_images&=load_bitmap("images\\on.bmp", the_palette)
+setup_images&=load_bitmap("images\\on1.bmp", the_palette)
+setup_images&=load_bitmap("images\\off.bmp", the_palette)
+setup_images&=load_bitmap("images\\off1.bmp", the_palette)
+setup_images&=load_bitmap("images\\arrow.bmp", the_palette)
+setup_images&=load_bitmap("images\\scaling.bmp", the_palette)
+
+set_palette(the_palette)
+buffer=create_bitmap(room_width,room_height)
+
+procedure call_undo()
+  undo=append(undo,{game_grid,col,row})
+end procedure
+
+procedure startup()
+sequence map_names
+integer fn,char
+map_names=sort(dir("maps\\*.map")) -- bug map files are missing
+passwords={}
+for i=1 to length(map_names) do
+  fn=open("maps\\"&map_names[i][1],"rb")
+  for j=1 to 16 do
+    char=getc(fn)
+  end for 
+  passwords=append(passwords,{getc(fn)-1,getc(fn)-2,getc(fn)-3,getc(fn)-4,getc(fn)-5,getc(fn)-6})
+  close(fn)
+end for
+room_last=length(map_names)
+end procedure
+startup()
+
+procedure load_map()
+integer fn,char
+ game_grid={}
+ for i=1 to 15 do
+   game_grid=append(game_grid,repeat(0,20))
+ end for
+ fn=open("maps\\"&sprint(room_index)&".map","rb")
+ if fn=-1 then
+   allegro_exit()
+   puts(1,"missing map file "&sprint(room_index)&".map")
+   sleep(2)
+   abort(0)
+ end if
+ for i=1 to 25 do
+   char=getc(fn)
+ end for
+ for i=1 to 15 do
+   for j=1 to 20 do
+     game_grid[i][j]=getc(fn)
+     if game_grid[i][j]=1 then
+       col=j
+       row=i
+     end if
+   end for
+ end for
+ close(fn)
+end procedure
+load_map()
+
+procedure new_map()
+ password="AAAAAA"
+ game_grid={}
+ for i=1 to 15 do
+   game_grid=append(game_grid,repeat(0,20))
+ end for
+ for i=1 to 15 do
+   for j=1 to 20 do
+     if i=1 or i=15 then
+       game_grid[i][j]=2
+     end if
+     if j=1 or j=20 then
+       game_grid[i][j]=2
+     end if
+   end for
+ end for
+ col=1
+ row=1
+end procedure
+
+procedure open_map()
+integer fn,char
+password={}
+ game_grid={}
+ for i=1 to 15 do
+   game_grid=append(game_grid,repeat(0,20))
+ end for
+ fn=open("maps\\"&sprint(ret)&".map","rb")
+ if fn=-1 then
+   allegro_exit()
+   puts(1,"missing map file temp.map")
+   sleep(2)
+   abort(0)
+ end if
+ for i=1 to 25 do
+   char=getc(fn)
+   if i>=17 and i<=22 then
+     password&=char
+   end if
+ end for
+ for i=1 to 15 do
+   for j=1 to 20 do
+     game_grid[i][j]=getc(fn)
+   end for
+ end for
+ close(fn)
+ password[1]-=1
+ password[2]-=2
+ password[3]-=3
+ password[4]-=4
+ password[5]-=5
+ password[6]-=6
+end procedure
+
+procedure save_map(integer index)
+integer fn
+sequence password2
+password2=password
+password2[1]+=1
+password2[2]+=2
+password2[3]+=3
+password2[4]+=4
+password2[5]+=5
+password2[6]+=6
+  fn=open("maps\\"&sprint(index)&".map","wb")
+    puts(fn,"GH2MAP"&{1,20,15}&"GARETH"&{0}&password2&{0,1,1})
+    for i=1 to 15 do
+       for j=1 to 20 do
+          puts(fn,game_grid[i][j])
+       end for
+    end for
+  close(fn)
+end procedure
+
+procedure check_password(sequence pass)
+  for i=1 to length(passwords) do
+    if equal(passwords[i],pass)=1 then
+      room_index=i
+      game_mode=1
+      undo={}
+      load_map() 
+      score=0 
+      play_music()
+      exit
+    end if
+  end for
+end procedure
+
+procedure room_next()
+  room_index+=1
+  if room_index>room_last then
+    room_index-=1
+    game_mode=4
+    game_win=1
+    return 
+  end if
+  load_map()
+  undo={}
+  score=0 
+  play_music()
+end procedure
+
+procedure draw_back()
+  for i=0 to window_height by 80 do
+    for j=0 to window_width by 80 do
+      blit(images[1],buffer,0,0,j,i,80,80)
+    end for
+  end for
+end procedure
+
+procedure draw_grid()
+  for i=1 to length(game_grid) do
+    for j=1 to length(game_grid[i]) do
+       if game_grid[i][j]=1 then
+         draw_sprite( buffer,images[2], (32*j)-32, (32*i)-32)
+       elsif game_grid[i][j]=2 then
+         draw_sprite( buffer,images[3], (32*j)-32, (32*i)-32)
+       elsif game_grid[i][j]=3 then
+         draw_sprite( buffer,images[4], (32*j)-32, (32*i)-32)
+       elsif game_grid[i][j]=4 then
+         draw_sprite( buffer,images[5], (32*j)-32, (32*i)-32)
+       elsif game_grid[i][j]=5 then
+         draw_sprite( buffer,images[6], (32*j)-32, (32*i)-32)
+       elsif game_grid[i][j]=6 then
+         draw_sprite( buffer,images[7], (32*j)-32, (32*i)-32)
+       elsif game_grid[i][j]=7 then
+         draw_sprite( buffer,images[8], (32*j)-32, (32*i)-32)
+       elsif game_grid[i][j]=8 then
+         draw_sprite( buffer,images[9], (32*j)-32, (32*i)-32)
+       elsif game_grid[i][j]=9 then
+         draw_sprite( buffer,images[10], (32*j)-32, (32*i)-32)
+       elsif game_grid[i][j]=10 then
+         draw_sprite( buffer,images[11], (32*j)-32, (32*i)-32)
+       elsif game_grid[i][j]=11 then
+         draw_sprite( buffer,images[12], (32*j)-32, (32*i)-32)
+       elsif game_grid[i][j]=12 then
+         draw_sprite( buffer,images[13], (32*j)-32, (32*i)-32)
+       elsif game_grid[i][j]=13 then
+         draw_sprite( buffer,images[14], (32*j)-32, (32*i)-32)
+       elsif game_grid[i][j]=14 then
+         draw_sprite( buffer,images[15], (32*j)-32, (32*i)-32)
+       elsif game_grid[i][j]=15 then
+         draw_sprite( buffer,images[16], (32*j)-32, (32*i)-32)
+       end if
+    end for
+  end for
+end procedure
+
+procedure move_boom()
+sequence list
+integer col,row,count,num
+list={}
+col=0
+row=0
+count=1
+num=0
+
+  for i=1 to 15 do
+    for j=1 to 20 do
+      if game_grid[i][j]=6 then
+        list=append(list,{i,j})
+      end if
+    end for
+  end for
+  for i=1 to length(list) do
+     row=list[i][1]
+     col=list[i][2]
+     count=1
+     num=0
+     if row<15 then
+       while 1 do
+         if (row+count)<=15 then
+           if game_grid[row+count][col]=0 then
+             game_grid[row][col]=0
+             game_grid[row+count-1][col]=0
+             game_grid[row+count][col]=6
+             num+=1
+           else
+             game_grid[row][col]=0
+             game_grid[row+count-1][col]=6
+             if num>0 then
+               if game_grid[row+count][col]=3 then
+                 game_grid[row+count-1][col]=0
+                 game_grid[row+count][col]=0
+                 play_sound_boom()
+               else
+                 game_grid[row+count-1][col]=0
+                 play_sound_boom()
+               end if
+             end if
+             exit
+           end if
+         else
+           exit  
+         end if
+         count+=1
+       end while
+     end if
+  end for
+end procedure
+
+procedure move_player(integer dir)
+  if dir=1 then--left
+
+    if col>1 then
+      if game_grid[row][col-1]=0 then
+        call_undo()
+        game_grid[row][col]=0
+        game_grid[row][col-1]=1
+        col-=1
+      elsif game_grid[row][col-1]=5 then
+        call_undo()
+        game_grid[row][col]=0
+        game_grid[row][col-1]=1
+        col-=1
+        score+=1
+        play_sound_point()
+      elsif game_grid[row][col-1]=7 then
+        call_undo()
+        game_grid[row][col]=0
+        game_grid[row][col-1]=1
+        col-=1
+        room_next()
+      elsif game_grid[row][col-1]=4 then
+        if col-2>1 then
+          if game_grid[row][col-2]=0 then
+            call_undo()
+            game_grid[row][col]=0
+            game_grid[row][col-1]=1
+            game_grid[row][col-2]=4
+            col-=1
+          end if
+        end if
+      elsif game_grid[row][col-1]=6 then
+        if col-2>1 then
+          if game_grid[row][col-2]=0 then
+            call_undo()
+            game_grid[row][col]=0
+            game_grid[row][col-1]=1
+            game_grid[row][col-2]=6
+            col-=1
+          end if
+        end if
+      elsif game_grid[row][col-1]=8 then
+        if col-2>1 then
+          if game_grid[row][col-2]=0 then
+            call_undo()
+            game_grid[row][col]=0
+            game_grid[row][col-1]=1
+            game_grid[row][col-2]=8
+            col-=1
+          elsif game_grid[row][col-2]=12 then
+            call_undo()
+            game_grid[row][col]=0
+            game_grid[row][col-1]=1
+            game_grid[row][col-2]=0
+            col-=1
+            play_sound_door()
+          end if
+        end if
+      elsif game_grid[row][col-1]=9 then
+        if col-2>1 then
+          if game_grid[row][col-2]=0 then
+            call_undo()
+            game_grid[row][col]=0
+            game_grid[row][col-1]=1
+            game_grid[row][col-2]=9
+            col-=1
+          elsif game_grid[row][col-2]=13 then
+            call_undo()
+            game_grid[row][col]=0
+            game_grid[row][col-1]=1
+            game_grid[row][col-2]=0
+            col-=1
+            play_sound_door()
+          end if
+        end if
+      elsif game_grid[row][col-1]=10 then
+        if col-2>1 then
+          if game_grid[row][col-2]=0 then
+            call_undo()
+            game_grid[row][col]=0
+            game_grid[row][col-1]=1
+            game_grid[row][col-2]=10
+            col-=1
+          elsif game_grid[row][col-2]=14 then
+            call_undo()
+            game_grid[row][col]=0
+            game_grid[row][col-1]=1
+            game_grid[row][col-2]=0
+            col-=1
+            play_sound_door()
+          end if
+        end if
+      elsif game_grid[row][col-1]=11 then
+        if col-2>1 then
+          if game_grid[row][col-2]=0 then
+            call_undo()
+            game_grid[row][col]=0
+            game_grid[row][col-1]=1
+            game_grid[row][col-2]=11
+            col-=1
+          elsif game_grid[row][col-2]=15 then
+            call_undo()
+            game_grid[row][col]=0
+            game_grid[row][col-1]=1
+            game_grid[row][col-2]=0
+            col-=1
+            play_sound_door()
+          end if
+        end if
+      end if
+    end if
+
+  elsif dir=2 then--right
+
+    if col<20 then
+      if game_grid[row][col+1]=0 then
+        call_undo()
+        game_grid[row][col]=0
+        game_grid[row][col+1]=1
+        col+=1
+      elsif game_grid[row][col+1]=5 then
+        call_undo()
+        game_grid[row][col]=0
+        game_grid[row][col+1]=1
+        col+=1
+        score+=1
+        play_sound_point()
+      elsif game_grid[row][col+1]=7 then
+        call_undo()
+        game_grid[row][col]=0
+        game_grid[row][col+1]=1
+        col+=1
+        room_next()
+      elsif game_grid[row][col+1]=4 then
+        if col+2<20 then
+          if game_grid[row][col+2]=0 then
+            call_undo()
+            game_grid[row][col]=0
+            game_grid[row][col+1]=1
+            game_grid[row][col+2]=4
+            col+=1
+          end if
+        end if
+      elsif game_grid[row][col+1]=6 then
+        if col+2<20 then
+          if game_grid[row][col+2]=0 then
+            call_undo()
+            game_grid[row][col]=0
+            game_grid[row][col+1]=1
+            game_grid[row][col+2]=6
+            col+=1
+          end if
+        end if
+      elsif game_grid[row][col+1]=8 then
+        if col+2>1 then
+          if game_grid[row][col+2]=0 then
+            call_undo()
+            game_grid[row][col]=0
+            game_grid[row][col+1]=1
+            game_grid[row][col+2]=8
+            col+=1
+          elsif game_grid[row][col+2]=12 then
+            call_undo()
+            game_grid[row][col]=0
+            game_grid[row][col+1]=1
+            game_grid[row][col+2]=0
+            col+=1
+            play_sound_door()
+          end if
+        end if
+      elsif game_grid[row][col+1]=9 then
+        if col+2>1 then
+          if game_grid[row][col+2]=0 then
+            call_undo()
+            game_grid[row][col]=0
+            game_grid[row][col+1]=1
+            game_grid[row][col+2]=9
+            col+=1
+          elsif game_grid[row][col+2]=13 then
+            call_undo()
+            game_grid[row][col]=0
+            game_grid[row][col+1]=1
+            game_grid[row][col+2]=0
+            col+=1
+            play_sound_door()
+          end if
+        end if
+      elsif game_grid[row][col+1]=10 then
+        if col+2>1 then
+          if game_grid[row][col+2]=0 then
+            call_undo()
+            game_grid[row][col]=0
+            game_grid[row][col+1]=1
+            game_grid[row][col+2]=10
+            col+=1
+          elsif game_grid[row][col+2]=14 then
+            call_undo()
+            game_grid[row][col]=0
+            game_grid[row][col+1]=1
+            game_grid[row][col+2]=0
+            col+=1
+            play_sound_door()
+          end if
+        end if
+      elsif game_grid[row][col+1]=11 then
+        if col+2>1 then
+          if game_grid[row][col+2]=0 then
+            call_undo()
+            game_grid[row][col]=0
+            game_grid[row][col+1]=1
+            game_grid[row][col+2]=11
+            col+=1
+          elsif game_grid[row][col+2]=15 then
+            call_undo()
+            game_grid[row][col]=0
+            game_grid[row][col+1]=1
+            game_grid[row][col+2]=0
+            col+=1
+            play_sound_door()
+          end if
+        end if
+      end if
+    end if
+
+  elsif dir=3 then--up
+    if row>1 then
+      if game_grid[row-1][col]=0 then
+        call_undo()
+        game_grid[row][col]=0
+        game_grid[row-1][col]=1
+        row-=1
+      elsif game_grid[row-1][col]=5 then
+        call_undo()
+        game_grid[row][col]=0
+        game_grid[row-1][col]=1
+        row-=1
+        score+=1
+        play_sound_point()
+      elsif game_grid[row-1][col]=7 then
+        call_undo()
+        game_grid[row][col]=0
+        game_grid[row-1][col]=1
+        row-=1
+        room_next()
+      elsif game_grid[row-1][col]=4 then
+        if row-2>1 then
+          if game_grid[row-2][col]=0 then
+            call_undo()
+            game_grid[row][col]=0
+            game_grid[row-1][col]=1
+            game_grid[row-2][col]=4
+            row-=1
+          end if
+        end if
+      elsif game_grid[row-1][col]=8 then
+        if row-2>1 then
+          if game_grid[row-2][col]=0 then
+            call_undo()
+            game_grid[row][col]=0
+            game_grid[row-1][col]=1
+            game_grid[row-2][col]=8
+            row-=1
+          elsif game_grid[row-2][col]=12 then
+            call_undo()
+            game_grid[row][col]=0
+            game_grid[row-1][col]=1
+            game_grid[row-2][col]=0
+            row-=1
+            play_sound_door()
+          end if
+        end if
+      elsif game_grid[row-1][col]=9 then
+        if row-2>1 then
+          if game_grid[row-2][col]=0 then
+            call_undo()
+            game_grid[row][col]=0
+            game_grid[row-1][col]=1
+            game_grid[row-2][col]=9
+            row-=1
+          elsif game_grid[row-2][col]=13 then
+            call_undo()
+            game_grid[row][col]=0
+            game_grid[row-1][col]=1
+            game_grid[row-2][col]=0
+            row-=1
+            play_sound_door()
+          end if
+        end if
+      elsif game_grid[row-1][col]=10 then
+        if row-2>1 then
+          if game_grid[row-2][col]=0 then
+            call_undo()
+            game_grid[row][col]=0
+            game_grid[row-1][col]=1
+            game_grid[row-2][col]=10
+            row-=1
+          elsif game_grid[row-2][col]=14 then
+            call_undo()
+            game_grid[row][col]=0
+            game_grid[row-1][col]=1
+            game_grid[row-2][col]=0
+            row-=1
+            play_sound_door()
+          end if
+        end if
+      elsif game_grid[row-1][col]=11 then
+        if row-2>1 then
+          if game_grid[row-2][col]=0 then
+            call_undo()
+            game_grid[row][col]=0
+            game_grid[row-1][col]=1
+            game_grid[row-2][col]=11
+            row-=1
+          elsif game_grid[row-2][col]=15 then
+            call_undo()
+            game_grid[row][col]=0
+            game_grid[row-1][col]=1
+            game_grid[row-2][col]=0
+            row-=1
+            play_sound_door()
+          end if
+        end if
+
+      end if
+    end if
+
+  elsif dir=4 then--down
+
+    if row<15 then
+      if game_grid[row+1][col]=0 then
+        call_undo()
+        game_grid[row][col]=0
+        game_grid[row+1][col]=1
+        row+=1
+      elsif game_grid[row+1][col]=5 then
+        call_undo()
+        game_grid[row][col]=0
+        game_grid[row+1][col]=1
+        row+=1
+        score+=1
+        play_sound_point()
+      elsif game_grid[row+1][col]=7 then
+        call_undo()
+        game_grid[row][col]=0
+        game_grid[row+1][col]=1
+        row+=1
+        room_next()
+      elsif game_grid[row+1][col]=4 then
+        if row+2<15 then
+          if game_grid[row+2][col]=0 then
+            call_undo()
+            game_grid[row][col]=0
+            game_grid[row+1][col]=1
+            game_grid[row+2][col]=4
+            row+=1
+          end if
+        end if
+      elsif game_grid[row+1][col]=8 then
+        if row+2<15 then
+          if game_grid[row+2][col]=0 then
+            call_undo()
+            game_grid[row][col]=0
+            game_grid[row+1][col]=1
+            game_grid[row+2][col]=8
+            row+=1
+          elsif game_grid[row+2][col]=12 then
+            call_undo()
+            game_grid[row][col]=0
+            game_grid[row+1][col]=1
+            game_grid[row+2][col]=0
+            row+=1
+            play_sound_door()
+          end if
+        end if
+      elsif game_grid[row+1][col]=9 then
+        if row+2<15 then
+          if game_grid[row+2][col]=0 then
+            call_undo()
+            game_grid[row][col]=0
+            game_grid[row+1][col]=1
+            game_grid[row+2][col]=9
+            row+=1
+          elsif game_grid[row+2][col]=13 then
+            call_undo()
+            game_grid[row][col]=0
+            game_grid[row+1][col]=1
+            game_grid[row+2][col]=0
+            row+=1
+            play_sound_door()
+          end if
+        end if
+      elsif game_grid[row+1][col]=10 then
+        if row+2<15 then
+          if game_grid[row+2][col]=0 then
+            call_undo()
+            game_grid[row][col]=0
+            game_grid[row+1][col]=1
+            game_grid[row+2][col]=10
+            row+=1
+          elsif game_grid[row+2][col]=14 then
+            call_undo()
+            game_grid[row][col]=0
+            game_grid[row+1][col]=1
+            game_grid[row+2][col]=0
+            row+=1
+            play_sound_door()
+          end if
+        end if
+      elsif game_grid[row+1][col]=11 then
+        if row+2<15 then
+          if game_grid[row+2][col]=0 then
+            call_undo()
+            game_grid[row][col]=0
+            game_grid[row+1][col]=1
+            game_grid[row+2][col]=11
+            row+=1
+          elsif game_grid[row+2][col]=15 then
+            call_undo()
+            game_grid[row][col]=0
+            game_grid[row+1][col]=1
+            game_grid[row+2][col]=0
+            row+=1
+            play_sound_door()
+          end if
+        end if
+
+      end if
+    end if
+  end if
+for i=1 to 10 do
+  move_boom()
+end for
+end procedure
+
+integer show_msg,msg_time
+sequence message,key_buffer,key_list
+message=""
+show_msg=0
+msg_time=0
+key_buffer={}
+key_list=
+{
+{"A","B","C","D","E","F","G","H","I"},
+{"J","K","L","M","N","O","P","Q","R"},
+{"S","T","U","V","W","X","Y","Z"," "}
+}
+
+integer time1,limit
+time1=0
+limit=30
+
+procedure display_message()
+  if show_msg=1 then
+    rectfill(buffer, view_left+(window_width/2)-(length(message)*4)-4,view_top+(window_height/2)-2,view_left+(window_width/2)+(length(message)*4)+4, view_top+(window_height/2)+12,rgb(255,0,255))
+    textout_ex(buffer,font,message,view_left+(window_width/2)-(length(message)*4),view_top+(window_height/2),rgb(255,255,255),-1)
+    msg_time+=1
+    if msg_time>limit then
+     msg_time=0
+     show_msg=0
+    end if
+  end if  
+end procedure
+
+procedure delay(integer v)
+atom time1
+  time1=0
+  if v<0 then return end if
+  while time1<v do
+     time1+=0.0001
+  end while
+end procedure
+
+sequence star
+star={}
+atom star0_gfx
+star0_gfx=load_bitmap("images\\star0.bmp", the_palette)
+
+integer game_end
+game_end=0
+function game_exit()
+  game_end=1
+  return 1
+end function 
+set_window_close_hook(routine_id("game_exit"))
+
+procedure background_star()
+  integer x,y,speed
+  for i=1 to length(star) do
+     x=star[i][1]
+     y=star[i][2]
+     speed=star[i][3]
+     y-=speed
+     if y<0 then
+       y=window_height+20
+       x=rand(window_width-20)
+       speed=rand(4)
+     end if
+
+     draw_sprite( buffer,star0_gfx, x, y)
+
+     star[i][1]=x
+     star[i][2]=y
+     star[i][3]=speed
+  end for
+end procedure
+
+function enter_password()
+sequence text,char
+if equal(password,"AAAAAA")=1 then
+ text="" 
+else
+ text=password
+end if
+char={}
+
+while 1 do 
+time1+=1
+
+
+if time1>6 then
+  if key(KEY_ESC) then
+     exit
+     time1=0
+  elsif key(KEY_ENTER) then
+     if length(text)=6 then
+       password=text
+       return 1
+     else
+       message="The password must be six characters long with only capitol letters"
+       show_msg=1
+       msg_time=-(limit*3)
+       exit 
+     end if
+     time1-=4
+  elsif key(KEY_BACKSPACE) then
+     if length(text)>1 then
+       text=text[1..length(text)-1]
+     else
+       text={}  
+     end if
+     time1=0
+  end if
+end if
+
+if keypressed() then
+  char = readkey()
+  if char[1]>=65 and char[1]<=90 and length(text)<6 then
+    text&=char[1]
+  end if
+end if
+    
+  rectfill(buffer, (window_width/2)-100,(window_height/2)-100,(window_width/2)+100, (window_height/2),rgb(0,0,255))
+  textout_ex(buffer,font, "Map Password", (window_width/2)-50,(window_height/2)-100 , rgb(255,255,255) ,-1)
+  textout_ex(buffer,font, "Use the keyboard to", (window_width/2)-90,(window_height/2)-80 , rgb(255,255,255) ,-1)
+  textout_ex(buffer,font, "Enter the password", (window_width/2)-90,(window_height/2)-60 , rgb(255,255,255) ,-1)
+  textout_ex(buffer,font, "Capitol letters only", (window_width/2)-90,(window_height/2)-40 , rgb(255,255,255) ,-1)
+  textout_ex(buffer,font, text, (window_width/2)-80,(window_height/2)-20 , rgb(255,255,255) ,-1)
+  
+  if window_mode=0 then
+    blit(buffer,screen,view_left,view_top,0,0,window_width,window_height)
+  elsif window_mode=1 then
+    if fullscreen_scale=0 then
+      blit(buffer,screen,view_left,view_top,80,50,window_width,window_height)
+    else
+      stretch_blit(buffer,screen,0,0,window_width,window_height,0,0,800,600)
+    end if
+  end if
+  delay(wait)
+end while
+  return 0
+end function
+
+integer open_map_index
+open_map_index=0
+
+function choose_map_save()
+
+integer map_index
+if open_map_index!=0 then
+  map_index=open_map_index
+else
+  map_index=1
+end if
+
+
+while 1 do 
+time1+=1
+if time1>6 then
+  if key(KEY_ESC) then
+     exit
+     time1=0
+  elsif key(KEY_ENTER) then
+     time1-=4
+     open_map_index=map_index
+     if map_index=room_last+1 then
+       room_last+=1
+     end if
+     return map_index
+  elsif key(KEY_LEFT) then
+    map_index-=1
+    if map_index<1 then
+      map_index=1
+    end if
+    time1=0
+  elsif key(KEY_RIGHT) then
+    map_index+=1
+    if map_index>room_last+1 then
+      map_index=room_last+1
+    end if
+    time1=0
+  end if
+end if
+
+  rectfill(buffer, (window_width/2)-100,(window_height/2)-100,(window_width/2)+100, (window_height/2),rgb(0,0,255))
+  textout_ex(buffer,font, "Save map", (window_width/2)-40,(window_height/2)-100 , rgb(255,255,255) ,-1)
+  textout_ex(buffer,font, "Use the arrow keys to", (window_width/2)-90,(window_height/2)-80 , rgb(255,255,255) ,-1)
+  textout_ex(buffer,font, "Choose a map number", (window_width/2)-80,(window_height/2)-60 , rgb(255,255,255) ,-1)
+  if map_index=open_map_index then
+    textout_ex(buffer,font, "Save To Open Map: "&sprint(map_index), (window_width/2)-80,(window_height/2)-40 , rgb(255,0,0) ,-1)
+  else
+    if map_index=room_last+1 then
+      textout_ex(buffer,font, "Create New Map: "&sprint(map_index), (window_width/2)-80,(window_height/2)-40 , rgb(255,255,255) ,-1)
+    else
+      textout_ex(buffer,font, "Replace A Map: "&sprint(map_index), (window_width/2)-80,(window_height/2)-40 , rgb(0,255,0) ,-1)
+    end if
+  end if
+  
+  if window_mode=0 then
+    blit(buffer,screen,view_left,view_top,0,0,window_width,window_height)
+  elsif window_mode=1 then
+    if fullscreen_scale=0 then
+      blit(buffer,screen,view_left,view_top,80,50,window_width,window_height)
+    else
+      stretch_blit(buffer,screen,0,0,window_width,window_height,0,0,800,600)
+    end if
+  end if
+  delay(wait)
+end while
+  return 0
+end function
+
+function choose_map()
+
+integer map_index
+map_index=1
+
+while 1 do 
+time1+=1
+if time1>6 then
+  if key(KEY_ESC) then
+     exit
+     time1=0
+  elsif key(KEY_ENTER) then
+     time1-=4
+     open_map_index=map_index
+     return map_index
+  elsif key(KEY_LEFT) then
+    map_index-=1
+    if map_index<1 then
+      map_index=1
+    end if
+    time1=0
+  elsif key(KEY_RIGHT) then
+    map_index+=1
+    if map_index>room_last then
+      map_index=room_last
+    end if
+    time1=0
+  end if
+end if
+
+  rectfill(buffer, (window_width/2)-100,(window_height/2)-100,(window_width/2)+100, (window_height/2),rgb(0,0,255))
+  textout_ex(buffer,font, "Open map", (window_width/2)-40,(window_height/2)-100 , rgb(255,255,255) ,-1)
+  textout_ex(buffer,font, "Use the arrow keys to", (window_width/2)-90,(window_height/2)-80 , rgb(255,255,255) ,-1)
+  textout_ex(buffer,font, "Choose a map number", (window_width/2)-80,(window_height/2)-60 , rgb(255,255,255) ,-1)
+  textout_ex(buffer,font, "Map: "&sprint(map_index), (window_width/2)-80,(window_height/2)-40 , rgb(255,255,255) ,-1)
+  
+  if window_mode=0 then
+    blit(buffer,screen,view_left,view_top,0,0,window_width,window_height)
+  elsif window_mode=1 then
+    if fullscreen_scale=0 then
+      blit(buffer,screen,view_left,view_top,80,50,window_width,window_height)
+    else
+      stretch_blit(buffer,screen,0,0,window_width,window_height,0,0,800,600)
+    end if
+  end if
+  delay(wait)
+end while
+  return 0
+end function
+
+while 1 do
+
+if game_end=1 then
+  exit
+end if
+
+fps1+=1
+if timer1<time() then
+   fps2=fps1
+   fps1=0
+   timer1=time()+1
+   if fps2>limit then
+     if (fps2-limit)>50 then
+       wait+=20
+     elsif (fps2-limit)>30 then
+       wait+=10
+     elsif (fps2-limit)>10 then
+       wait+=5
+     elsif (fps2-limit)>0 then
+       wait+=5
+     end if
+   elsif fps2<limit then
+     if (fps2-limit)<-50 then
+       wait-=20
+     elsif (fps2-limit)<-30 then
+       wait-=10
+     elsif (fps2-limit)<-10 then
+       wait-=10
+     elsif (fps2-limit)<-0 then
+       wait-=5
+     end if
+   end if
+end if
+
+time1+=1
+if game_mode=0 then -- main menu
+if time1>6 then
+  if key(KEY_UP) then
+     menu_index-=1
+     if menu_index<0 then
+       menu_index=0
+     else
+       play_sound_select_move()
+     end if
+     time1=0
+  elsif key(KEY_DOWN) then
+     menu_index+=1
+     if menu_index>6 then
+       menu_index=6
+     else
+       play_sound_select_move()
+     end if
+     time1=0
+  elsif key(KEY_ENTER) then
+     play_sound_select_choose()
+     if menu_index=0 then--game
+       game_mode=1
+       show_msg=0
+       room_index=1
+       load_map()
+       undo={}
+       score=0 
+       play_music()
+     elsif menu_index=1 then -- password
+        game_mode=3
+        show_msg=0     
+        key_buffer={}
+        row=1
+        col=1
+        clear_keybuf()
+     elsif menu_index=3 then --setup
+       clear_keybuf()
+       show_msg=0
+       game_mode=5
+       row=1
+       col=1
+     elsif menu_index=2 then
+       if game_win=1 then
+         show_msg=0
+         game_mode=6
+         open_map_index=0
+         new_map()
+       else
+         msg_time=-limit
+         message="You must complete all the games levels frist."
+         show_msg=1
+       end if
+       time1=0
+     elsif menu_index=4 then
+       game_mode=2
+       show_msg=0
+     elsif menu_index=5 then
+       game_mode=4
+       star={}
+       floodfill(star0_gfx,bitmap_w(star0_gfx)/2,bitmap_h(star0_gfx)/2, rgb(rand(255),rand(255),rand(255)))
+       for i=1 to 100+rand(200) do
+         star=append(star,{rand(window_width-20),rand(window_height)+20,rand(4)}) 
+       end for
+       show_msg=0
+     elsif menu_index=6 then
+       exit
+     end if
+     time1=0
+  end if
+end if
+
+clear_bitmap(buffer)
+
+draw_sprite( buffer,menu_images[1], 192, 32)
+draw_sprite( buffer,menu_images[3], 192, 96)
+draw_sprite( buffer,menu_images[5], 202, 160)
+draw_sprite( buffer,menu_images[7], 230, 224)
+draw_sprite( buffer,menu_images[9], 256, 288)
+draw_sprite( buffer,menu_images[11], 230, 350)
+draw_sprite( buffer,menu_images[13], 256, 416)
+
+if menu_index=0 then
+  draw_sprite( buffer,menu_images[2], 192, 32)
+elsif menu_index=1 then
+  draw_sprite( buffer,menu_images[4], 192, 96)
+elsif menu_index=2 then
+  draw_sprite( buffer,menu_images[6], 202, 160)
+elsif menu_index=3 then
+  draw_sprite( buffer,menu_images[8], 230, 224)
+elsif menu_index=4 then
+  draw_sprite( buffer,menu_images[10], 256, 288)
+elsif menu_index=5 then
+  draw_sprite( buffer,menu_images[12], 230, 350)
+elsif menu_index=6 then
+  draw_sprite( buffer,menu_images[14], 256, 416)
+end if
+
+elsif game_mode=4 then -- about
+  if key(KEY_ESC) then
+     game_mode=0
+     time1=0 
+     show_msg=0
+     
+  end if
+  clear_bitmap(buffer)
+  background_star()
+  draw_sprite( buffer,images[20], 0, 0)
+
+elsif game_mode=6 then --map editor
+
+if time1>4 then
+
+  if key(KEY_LEFT) then
+     col-=1
+     if col<1 then
+       col=1
+     end if
+     time1=0
+  elsif key(KEY_RIGHT) then
+     col+=1
+     if col>20 then
+       col=20
+     end if
+     time1=0
+  elsif key(KEY_DOWN) then
+     row+=1
+     if row>15 then
+       row=15
+     end if
+     time1=0
+  elsif key(KEY_UP) then
+     row-=1
+     if row<1 then
+       row=1
+     end if
+     time1=0
+  elsif key(KEY_PGUP) then
+     game_grid[row][col]+=1
+     if game_grid[row][col]>15 then
+       game_grid[row][col]=0
+     end if
+     time1=0
+  elsif key(KEY_PGDN) then
+     game_grid[row][col]-=1
+     if game_grid[row][col]<0 then
+       game_grid[row][col]=15
+     end if
+     time1=0
+  elsif key(KEY_N) then--new map
+    msg_time=-limit
+    message="New Map"
+    show_msg=1
+    open_map_index=0
+    new_map()
+    time1=0
+  elsif key(KEY_O) then
+    show_msg=0
+    clear_bitmap(buffer)
+    draw_grid()
+    rect(buffer, (32*col)-32, (32*row)-32,(32*col), (32*row),rgb(255,255,255))
+    textout_ex(buffer,font, sprint(col), ((32*col)-32)+4, ((32*row)-32)+4 , rgb(255,255,255) ,-1)
+    textout_ex(buffer,font, sprint(row), ((32*col)-32)+4, ((32*row)-32)+22 , rgb(255,255,255) ,-1)
+    textout_ex(buffer,font, "Password: "&password&"  (N) New Map  (O) Open Map  (S) Save Map  (P) Set Password", 0, 480 , rgb(255,255,255) ,-1)
+    textout_ex(buffer,font, "(Page Up) And (Page Down) Cycle Frew The List Of Objects.  (Q) Quit Map Editor" , 0, 490 , rgb(255,255,255) ,-1)
+    ret=choose_map()
+    if ret!=0 then
+      msg_time=-limit
+      message="Open Map"
+      show_msg=1
+      open_map()
+      col=1
+      row=1
+    end if
+    time1=0
+  elsif key(KEY_S) then
+    if equal(password,"AAAAAA")=0 then
+      show_msg=0
+      clear_bitmap(buffer)
+      draw_grid()
+      rect(buffer, (32*col)-32, (32*row)-32,(32*col), (32*row),rgb(255,255,255))
+      textout_ex(buffer,font, sprint(col), ((32*col)-32)+4, ((32*row)-32)+4 , rgb(255,255,255) ,-1)
+      textout_ex(buffer,font, sprint(row), ((32*col)-32)+4, ((32*row)-32)+22 , rgb(255,255,255) ,-1)
+      textout_ex(buffer,font, "Password: "&password&"  (N) New Map  (O) Open Map  (S) Save Map  (P) Set Password", 0, 480 , rgb(255,255,255) ,-1)
+      textout_ex(buffer,font, "(Page Up) And (Page Down) Cycle Frew The List Of Objects.  (Q) Quit Map Editor" , 0, 490 , rgb(255,255,255) ,-1)
+      ret=choose_map_save()
+      if ret!=0 then
+        message="Save Map"
+        msg_time=-limit
+        show_msg=1
+        save_map(ret)
+      end if
+    else
+      message="Map password needs to be set frist"
+      msg_time=-(limit*2)
+      show_msg=1
+    end if
+    time1=0
+  elsif key(KEY_P) then
+    show_msg=0
+    clear_bitmap(buffer)
+    draw_grid()
+    rect(buffer, (32*col)-32, (32*row)-32,(32*col), (32*row),rgb(255,255,255))
+    textout_ex(buffer,font, sprint(col), ((32*col)-32)+4, ((32*row)-32)+4 , rgb(255,255,255) ,-1)
+    textout_ex(buffer,font, sprint(row), ((32*col)-32)+4, ((32*row)-32)+22 , rgb(255,255,255) ,-1)
+    textout_ex(buffer,font, "Password: "&password&"  (N) New Map  (O) Open Map  (S) Save Map  (P) Set Password", 0, 480 , rgb(255,255,255) ,-1)
+    textout_ex(buffer,font, "(Page Up) And (Page Down) Cycle Frew The List Of Objects.  (Q) Quit Map Editor" , 0, 490 , rgb(255,255,255) ,-1)
+    ret=enter_password()
+    if ret=1 then
+      msg_time=-limit
+      message="Password set to "&password
+      show_msg=1
+    end if
+    time1=0
+  elsif key(KEY_Q) then
+     game_mode=0
+     time1=0
+     msg_time=0
+     show_msg=0
+  end if
+end if
+
+  clear_bitmap(buffer)
+  draw_grid()
+  rect(buffer, (32*col)-32, (32*row)-32,(32*col), (32*row),rgb(255,255,255))
+  textout_ex(buffer,font, sprint(col), ((32*col)-32)+4, ((32*row)-32)+4 , rgb(255,255,255) ,-1)
+  textout_ex(buffer,font, sprint(row), ((32*col)-32)+4, ((32*row)-32)+22 , rgb(255,255,255) ,-1)
+  textout_ex(buffer,font, "Password: "&password&"  (N) New Map  (O) Open Map  (S) Save Map  (P) Set Password", 0, 480 , rgb(255,255,255) ,-1)
+  textout_ex(buffer,font, "(Page Up) And (Page Down) Cycle Frew The List Of Objects.  (Q) Quit Map Editor" , 0, 490 , rgb(255,255,255) ,-1)
+
+elsif game_mode=5 then --setup
+
+if time1>6 then
+  if key(KEY_ESC) then
+     game_mode=0
+     time1=0
+     
+  elsif key(KEY_LEFT) then
+    time1=0
+    col-=1
+    if col<1 then
+      col=1
+    else
+      play_sound_select_move()
+    end if
+  elsif key(KEY_UP) then
+    time1=0
+    row-=1
+    if row<1 then
+      row=1
+    else
+      play_sound_select_move()
+    end if
+    if row=4 and window_mode=0 then
+      row=3
+    end if
+  elsif key(KEY_DOWN) then
+    time1=0
+    row+=1
+    if row>5 then
+      row=5
+    else
+      play_sound_select_move()
+    end if
+    if row=4 and window_mode=0 then
+      row=5
+    end if
+  elsif key(KEY_RIGHT) then
+    time1=0
+    col+=1
+    if col>2 then
+      col=2
+    else
+      play_sound_select_move()
+    end if
+  elsif key(KEY_ENTER) then
+    if row=1 and col=1 and music_on=0 then
+      music_on=1
+      play_music()
+      play_sound_select_choose()
+    elsif row=1 and col=2 and music_on=1 then
+      music_on=0
+      stop_midi()
+      play_sound_select_choose()
+    elsif row=2 and col=1 and sound_on=0 then
+      sound_on=1
+      play_sound_select_choose()
+    elsif row=2 and col=2 and sound_on=1 then
+      sound_on=0
+      play_sound_select_choose()
+    elsif row=3 and col=1 and need_points=0 then
+      need_points=1
+      play_sound_select_choose()
+    elsif row=3 and col=2 and need_points=1 then
+      need_points=0
+      play_sound_select_choose()
+    elsif row=4 and col=1 and fullscreen_scale=0 and window_mode=1 then
+      fullscreen_scale=1
+      play_sound_select_choose()
+      clear_bitmap(screen)
+    elsif row=4 and col=2 and fullscreen_scale=1 and window_mode=1 then
+      fullscreen_scale=0
+      play_sound_select_choose()
+      clear_bitmap(screen)
+    elsif row=5 and col=1 and window_mode=1 then
+      window_mode=0
+      ret = set_gfx_mode(GFX_AUTODETECT_WINDOWED, window_width, window_height, 0,0)
+      play_sound_select_choose()
+    elsif row=5 and col=2 and window_mode=0 then
+      window_mode=1
+      ret = set_gfx_mode(GFX_AUTODETECT_FULLSCREEN, 800, 600, 0,0)
+      play_sound_select_choose()
+    end if
+    time1=0
+  end if
+end if 
+
+  clear_bitmap(buffer)
+  draw_sprite( buffer,menu_images[7], 230, 10)
+  draw_sprite( buffer,setup_images[1], 140, 80)
+if music_on=1 then
+  draw_sprite( buffer,setup_images[10], 340, 80)
+  draw_sprite( buffer,setup_images[11], 440, 80)
+else
+  draw_sprite( buffer,setup_images[9], 340, 80)
+  draw_sprite( buffer,setup_images[12], 440, 80)
+end if
+
+  draw_sprite( buffer,setup_images[2], 140, 120)
+if sound_on=1 then
+  draw_sprite( buffer,setup_images[10], 340, 120)
+  draw_sprite( buffer,setup_images[11], 440, 120)
+else
+  draw_sprite( buffer,setup_images[9], 340, 120)
+  draw_sprite( buffer,setup_images[12], 440, 120)
+end if
+
+  draw_sprite( buffer,setup_images[3], 140, 160)
+if need_points=1 then
+  draw_sprite( buffer,setup_images[10], 340, 160)
+  draw_sprite( buffer,setup_images[11], 440, 160)
+else
+  draw_sprite( buffer,setup_images[9], 340, 160)
+  draw_sprite( buffer,setup_images[12], 440, 160)
+end if
+
+  draw_sprite( buffer,setup_images[14], 140, 200)
+if fullscreen_scale=1 then
+  draw_sprite( buffer,setup_images[10], 340, 200)
+  draw_sprite( buffer,setup_images[11], 440, 200)
+else
+  draw_sprite( buffer,setup_images[9], 340, 200)
+  draw_sprite( buffer,setup_images[12], 440, 200)
+end if
+
+  draw_sprite( buffer,setup_images[4], 140, 240)
+if window_mode=0 then
+  draw_sprite( buffer,setup_images[6], 290, 240)
+  draw_sprite( buffer,setup_images[7], 440, 240)
+else
+  draw_sprite( buffer,setup_images[5], 290, 240)
+  draw_sprite( buffer,setup_images[8], 440, 240)
+end if
+
+if row=1 and col=1 then
+  draw_sprite( buffer,setup_images[13], 300, 80)
+elsif row=1 and col=2 then
+  draw_sprite( buffer,setup_images[13], 400, 80)
+elsif row=2 and col=1 then
+  draw_sprite( buffer,setup_images[13], 300, 120)
+elsif row=2 and col=2 then
+  draw_sprite( buffer,setup_images[13], 400, 120)
+elsif row=3 and col=1 then
+  draw_sprite( buffer,setup_images[13], 300, 160)
+elsif row=3 and col=2 then
+  draw_sprite( buffer,setup_images[13], 400, 160)
+elsif row=4 and col=1 then
+  draw_sprite( buffer,setup_images[13], 300, 200)
+elsif row=4 and col=2 then
+  draw_sprite( buffer,setup_images[13], 400, 200)
+elsif row=5 and col=1 then
+  draw_sprite( buffer,setup_images[13], 250, 240)
+elsif row=5 and col=2 then
+  draw_sprite( buffer,setup_images[13], 400, 240)
+end if
+
+elsif game_mode=2 then --help
+
+  if key(KEY_ESC) then
+     game_mode=0
+     time1=0
+     
+  end if
+  draw_sprite( buffer,images[18], 0, 0)
+
+
+elsif game_mode=3 then -- password
+
+if time1>5 then
+  if key(KEY_ESC) then
+     game_mode=0
+     time1=0
+     show_msg=0
+     
+  elsif key(KEY_LEFT) then
+    col-=1
+    if col<1 then
+      col=9
+    end if
+    time1=0
+    play_sound_select_move()
+  elsif key(KEY_RIGHT) then
+    col+=1
+     if col>9 then
+       col=1
+     end if
+     time1=0
+     play_sound_select_move()
+  elsif key(KEY_UP) then
+     row-=1
+     if row<1 then
+       row=3
+     end if
+     time1=0
+     play_sound_select_move()
+  elsif key(KEY_DOWN) then
+     row+=1
+     if row>3 then
+       row=1
+     end if
+     time1=0
+     play_sound_select_move()
+  elsif key(KEY_BACKSPACE) then
+     if length(key_buffer)>1 then
+       key_buffer=key_buffer[1..length(key_buffer)-1]
+     else
+       key_buffer={}  
+     end if
+     time1=0
+  elsif key(KEY_ENTER) then
+    if row=3 and col=9 then
+    else
+      play_sound_select_choose()
+      key_buffer&=key_list[row][col]
+      time1=0
+      if length(key_buffer)=6 then
+        if equal(key_buffer,"EDITOR")=1 then
+          key_buffer={}
+          msg_time=-limit
+          message="Cheater"
+          show_msg=1
+          game_mode=6
+          open_map_index=0
+          new_map()
+        elsif equal(key_buffer,"LEVELS")=1 then
+          key_buffer={}
+          msg_time=-limit
+          message="Cheater"
+          show_msg=1
+          if skip_room=0 then
+            skip_room=1
+          else
+            skip_room=0
+          end if
+        else
+          check_password(key_buffer)
+          if game_mode=3 then
+            key_buffer={}
+          end if
+        end if
+      end if
+    end if
+  end if
+end if
+  draw_sprite( buffer,images[19], 0, 0)
+  draw_sprite( buffer,menu_images[3], 192, 12)
+  rect(buffer, 114+(46*col)-46, 100+(50*row)-50, 114+(46*col), 100+(50*row), rgb(255,255,255))
+  textout_ex(buffer,font, "Password: "&key_buffer, (window_width/2)-(length(key_buffer)*4)-64, 300, rgb(255,255,255) ,-1)
+elsif game_mode=1 then  -- game
+
+if time1>6 then
+  if key(KEY_ESC) then
+     game_mode=0
+     time1=0
+     
+     msg_time=0
+     show_msg=0
+  elsif key(KEY_LEFT) then
+    move_player(1)
+    time1=0
+  elsif key(KEY_RIGHT) then
+    move_player(2)
+    time1=0
+  elsif key(KEY_UP) then
+    move_player(3)
+    time1=0
+  elsif key(KEY_DOWN) then
+    move_player(4)
+    time1=0
+  elsif key(KEY_R) then
+     load_map()
+     undo={}
+     score=0 
+     play_music()
+     time1=0
+  elsif key(KEY_N) then
+    if skip_room=1 then
+      room_next()
+    end if
+    time1=0
+  elsif key(KEY_U) then
+   if length(undo)>0 then
+    if need_points=1 then
+      if score>0 then
+      game_grid=undo[length(undo)][1]
+      col=undo[length(undo)][2]
+      row=undo[length(undo)][3]
+      if length(undo)>1 then
+        undo=undo[1..length(undo)-1]
+      end if
+      score-=1
+      time1=0
+      else
+      message="Collect more sapphires"
+      show_msg=1
+      end if
+    else
+      game_grid=undo[length(undo)][1]
+      col=undo[length(undo)][2]
+      row=undo[length(undo)][3]
+      if length(undo)>1 then
+        undo=undo[1..length(undo)-1]
+      end if
+      time1=0
+    end if
+   end if
+  end if
+end if
+
+    draw_back()
+    draw_grid()
+  rectfill(buffer, 0,window_height-20,window_width, window_height,rgb(0,0,0))
+  if need_points=1 then
+    draw_sprite( buffer,images[17], 0, 484)
+    textout_ex(buffer,font, sprint(score), 20, 490, rgb(255,255,255) ,-1)
+  end if
+  textout_ex(buffer,font, "level: "&sprint(room_index), 560, 490, rgb(255,255,255) ,-1)
+  textout_ex(buffer,font, "password: "&passwords[room_index], 400, 490, rgb(255,255,255),-1 )
+end if
+  
+  --textout_ex(buffer,font, sprint(fps2)&"  score:"&sprint(score), view_left+20, view_top+20, rgb(255,255,255),-1 )
+  --textout_ex(buffer,font, sprint(fps2)&"  "&sprint(wait), view_left+20, view_top+20, rgb(255,255,255) ,-1)
+  --textout_ex(buffer,font, sprint(fps2), view_left+20, view_top+20, rgb(255,255,255) ,-1)
+  display_message()
+  if window_mode=0 then
+    blit(buffer,screen,view_left,view_top,0,0,window_width,window_height)
+  elsif window_mode=1 then
+    if fullscreen_scale=0 then
+      blit(buffer,screen,view_left,view_top,80,50,window_width,window_height)
+    else
+      stretch_blit(buffer,screen,0,0,window_width,window_height,0,0,800,600)
+    end if
+  end if
+  delay(wait)
+end while
+
+integer fn
+fn=open("settings.ini","w")
+  puts(fn,sprint(music_on)&"\n")
+  puts(fn,sprint(sound_on)&"\n")
+  puts(fn,sprint(need_points)&"\n")
+  puts(fn,sprint(window_mode)&"\n")
+  puts(fn,sprint(fullscreen_scale)&"\n")
+  if wait<0 then
+    puts(fn,"0\n")
+  else
+    puts(fn,sprint(wait)&"\n")
+  end if
+  puts(fn,sprint(game_win)&"\n")
+close(fn)
+
+destroy_bitmap(star0_gfx)
+for i=1 to length(setup_images) do
+    destroy_bitmap(setup_images[i])
+end for
+for i=1 to length(music) do
+  destroy_midi(music[i])
+end for
+for i=1 to length(menu_images) do
+    destroy_bitmap(menu_images[i])
+end for
+for i=1 to length(images) do
+    destroy_bitmap(images[i])
+end for
+destroy_bitmap(buffer)
+destroy_palette(the_palette)
+destroy_sample(door_sfx)
+destroy_sample(boom_sfx)
+destroy_sample(point_sfx)
+destroy_sample(select_choose_sfx)
+destroy_sample(select_move_sfx)
+allegro_exit()
